@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
+Copyright (c) 2019-2025, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -41,9 +41,9 @@ POSSIBILITY OF SUCH DAMAGE.
 import copy
 import enum
 from abc import ABC, abstractmethod
-from src.nncodec import nnc_core
+from nncodec import nnc_core
 import numpy as np
-from src.nncodec.nnc_core import common, hls
+from nncodec.nnc_core import hls, common
 import pickle
 
 class TopologyStorageFormat(enum.IntEnum):

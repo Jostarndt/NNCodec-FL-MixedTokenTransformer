@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
+Copyright (c) 2019-2025, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -40,20 +40,23 @@ POSSIBILITY OF SUCH DAMAGE.
 
 import copy, logging
 LOGGER = logging.getLogger()
-from src.nncodec import nnc_core
+from nncodec import nnc_core
 import h5py
 import os
-import tensorflow as tf
+# import tensorflow as tf
 
 import copy, logging
 import numpy as np
-from src.nncodec.framework.use_case_init import use_cases
-from src.nncodec.framework.applications.utils import evaluation
+from nncodec.framework.use_case_init import use_cases
+from nncodec.framework.applications.utils import evaluation
 from collections import OrderedDict
 
-def is_tef_model( model_object ):
-    return isinstance( model_object, tf.Module ) 
-    
+def is_tef_model(model_object):
+    try:
+        import tensorflow as tf
+        return isinstance(model_object, tf.Module)
+    except ImportError:
+        return False
 
 def save_to_tensorflow_file( model_data, path ):
         h5_model = h5py.File(path, 'w')
@@ -234,7 +237,7 @@ class TensorFlowModel(nnc_core.nnr_model.NNRModel):
     def load_model( self, 
                     model_path
                   ):
-        
+
         try:
             model_file = tf.keras.models.load_model(model_path)
         except:
@@ -270,15 +273,35 @@ class TensorFlowModel(nnc_core.nnr_model.NNRModel):
                                         model_object,
                                     ):
         self.model = model_object
-        
+
+        # h5_model_path = './temp.h5'
+        # model_object.save_weights(h5_model_path)
+        # model = h5py.File(h5_model_path, 'r')
+        # os.remove(h5_model_path)
+        #
+        # if 'layer_names' in model.attrs:
+        #     module_names = [n for n in model.attrs['layer_names']]
+        #
+        # layer_names = []
+        # for mod_name in module_names:
+        #     layer = model[mod_name]
+        #     if 'weight_names' in layer.attrs:
+        #         weight_names = [mod_name+'/'+n for n in layer.attrs['weight_names']]
+        #         if weight_names:
+        #             layer_names += weight_names
+        #
+        # model_parameter_dict = {}
+        # for name in layer_names:
+        #     model_parameter_dict[name] = model[name]
+
         weights = model_object.get_weights()
         layer_names = []
-        
+
         for layer in model_object.layers:
             mod_name = layer.name
             if layer.weights != []:
                 for weight in layer.weights:
-                    layer_names.append(mod_name+"/"+weight.name)
+                    layer_names.append(mod_name + "/" + weight.name)
 
         model_parameter_dict = {}
         for i, name in enumerate(layer_names):
@@ -501,7 +524,7 @@ class TensorFlowModel(nnc_core.nnr_model.NNRModel):
 
 
 
-class ImageNetTensorFlowModelExecuter(nnc_core.nnr_model.ModelExecute):
+class ImageNetTensorFlowModelExecuter( nnc_core.nnr_model.ModelExecute ):
 
     def __init__(self,
                  handler,

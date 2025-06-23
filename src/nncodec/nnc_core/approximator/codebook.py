@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
+Copyright (c) 2019-2025, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -38,16 +38,12 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 '''
 import numpy as np
-import sys
 import copy
-import multiprocessing
-import time
-import traceback
-from .. import common
-import deepCABAC
-from src.nncodec.nnc_core.coder import hls
-from ... import nnc_core
-from src.nncodec.nnc_core.nnr_model import NNRModelAccess
+from nncodec.nnc_core import common
+from nncodec.extensions import deepCABAC
+from nncodec.nnc_core.coder import hls
+from nncodec.nnc_core.nnr_model import NNRModelAccess, W_TYPES
+from nncodec.nnc_core.hdsp.hdsp_tool import HDSP_OPTS_OFF
 
 
 def derive_sorted_codebook_from_tensor(tensor):
@@ -65,7 +61,8 @@ def get_codebook_offset( codebook, indices, cabac_unary_length_minus1 ):
             encoder = deepCABAC.Encoder()
             encoder.initCtxModels( cabac_unary_length_minus1, 1 )
             indexes = indices - cb
-            encoder.encodeLayer( indexes, 0, 0 )
+            hdsp_opts = HDSP_OPTS_OFF()
+            encoder.encodeLayer(indexes, 0, 0, 0, 0, 0, np.zeros(indexes.shape[0], dtype=np.int32), *hdsp_opts, 0, 0)
             bits = len( encoder.finish().tobytes() )
             if minBits == None or bits < minBits:
                 minBits = bits
@@ -86,7 +83,7 @@ def get_best_egk(codebook, codebookOffset):
         cb_hls["codebook_egk__"] = i
         bs = bytearray()
         w = hls.BitWriter(bs)
-        hls_enc = hls.Coder(w, cb_hls)
+        hls_enc = hls.Coder( w, cb_hls )
         hls_enc.codebook("")
         bytes_cb = w.getNumBitsTouched()
         if min_bytes_cb is None or bytes_cb < min_bytes_cb:
@@ -103,13 +100,33 @@ def get_codebook_bytes(codebook, codebookOffset, cbEgk):
     
     bs = bytearray()
     w = hls.BitWriter(bs)
-    hls_enc = hls.Coder(w, cb_hls)
+    hls_enc = hls.Coder( w, cb_hls )
     hls_enc.codebook("")
     bytes_cb = w.getNumBitsTouched()
    
     return bytes_cb
 
-def approx(approx_info, model_info, approx_data_in, param_opt=0):
+def check_array_all_zero_or_scalar(x):
+    if np.isscalar(x):
+        return isinstance(x, (int, np.integer))
+    elif isinstance(x, np.ndarray) and x.ndim == 0:
+        return isinstance(x.item(), (int, np.integer))
+    elif isinstance(x, np.ndarray) and np.all(x == 0):
+        return True
+    else:
+        return False
+
+def clip_for_int_aligned(quantizedValues, approx_info, approx_data_in, model_info, param):
+    bw_ap = approx_info["integer_aligned_bitdepth"]
+    bw = bw_ap if bw_ap > 7 or model_info["parameter_type"][param] in W_TYPES else 8  # non-weight params at least in 8bit
+    prm = approx_data_in["parameters"][param]
+    if approx_info["unsigned_integer_support"] and len(prm[prm < 0]) == 0:
+        quantizedValues = quantizedValues.clip(0, 2 ** bw - 1)
+    else:
+        quantizedValues = quantizedValues.clip(-2 ** (bw - 1), 2 ** (bw - 1) - 1)
+    return quantizedValues
+
+def approx(approx_info, model_info, approx_data_in, enc_info):
 
     ##Qunatize tensor with uniform but without DQ
     approx_data_out = {k: copy.copy(v) for k, v in approx_data_in.items()} # create copies of dicts in approx_data
@@ -126,7 +143,7 @@ def approx(approx_info, model_info, approx_data_in, param_opt=0):
                 
                 qp_off = 0
                 if approx_info['dq_flag'][param] == 1:
-                    qp_off = common.compute_qp_offset_to_dq_equivalent(approx_data_out['qp_density'])
+                    qp_off = common.compute_qp_offset_to_dq_equivalent( approx_data_out['qp_density'] )
                     print("INFO: Dependent quatization (DQ) can not be used with 'codebook'. In order to get similiar performance (to DQ) the QP is changed by {}!".format(-qp_off))
 
                 enc_qp = approx_info['qp'][param] - qp_off
@@ -139,8 +156,12 @@ def approx(approx_info, model_info, approx_data_in, param_opt=0):
                     enc_qp,
                     approx_info["lambda_scale"],
                     approx_info["cabac_unary_length_minus1"],
-                    approx_data_in["scan_order"].get(param, 0)
+                    approx_data_in["scan_order"].get(param, 0),
+                    enc_info.get("general_profile_idc", 0) if enc_info else 0
                 )
+
+                if "integer_aligned_bitdepth" in approx_info and not check_array_all_zero_or_scalar(approx_data_out["parameters"][param]):
+                    quantizedValues = clip_for_int_aligned(quantizedValues, approx_info, approx_data_in, model_info, param)
                 if qp != enc_qp:
                     print("INFO: QP for {} has been clipped from {} to {} to avoid int32_t overflow!".format(param, approx_info['qp'][param],qp))
                     approx_data_out['qp'][param] = qp
@@ -174,21 +195,32 @@ def approx(approx_info, model_info, approx_data_in, param_opt=0):
                             enc_qp,
                             approx_info["lambda_scale"],
                             approx_info["cabac_unary_length_minus1"],
-                            approx_data_in["scan_order"].get(param, 0)
+                            approx_data_in["scan_order"].get(param, 0),
+                            enc_info.get("general_profile_idc", 0) if enc_info else 0,
                         )
-                    
+                    if "integer_aligned_bitdepth" in approx_info and not check_array_all_zero_or_scalar(approx_data_out["parameters"][param]):
+                        quantizedValues = clip_for_int_aligned(quantizedValues, approx_info, approx_data_in, model_info, param)
 
                     ##Compute Cost for encoding uniform quantized parameters
                     testEnc = deepCABAC.Encoder()
-                    testEnc.initCtxModels( approx_info["cabac_unary_length_minus1"], param_opt )
-                    testEnc.encodeLayer(quantizedValues, approx_info['dq_flag'][param], approx_data_in["scan_order"].get(param, 0) )
+                    testEnc.initCtxModels( approx_info["cabac_unary_length_minus1"], enc_info.get("param_opt_flag", 0) if enc_info else 0 )
+                    hdsp_opts = HDSP_OPTS_OFF()
+                    testEnc.encodeLayer(quantizedValues, approx_info['dq_flag'][param], approx_data_in["scan_order"].get(param, 0),
+                                        enc_info.get("general_profile_idc", 0) if enc_info else 0,
+                                        enc_info.get('parent_node_id_present_flag', 0) if enc_info else 0,
+                                        0, np.zeros(quantizedValues.shape[0], dtype=np.int32), *hdsp_opts, 0, 0
+                                        )
                     bs_par = bytearray( testEnc.finish().tobytes() )
 
                     bytesUni = len(bs_par)
                     ##Compute cost for codebook quantized parameters + bytes for encoding the codebooks
                     testEnc = deepCABAC.Encoder()
-                    testEnc.initCtxModels( approx_info["cabac_unary_length_minus1"], param_opt )
-                    testEnc.encodeLayer(indexes, 0, approx_data_in["scan_order"].get(param, 0) )
+                    testEnc.initCtxModels( approx_info["cabac_unary_length_minus1"], enc_info.get("param_opt_flag", 0) if enc_info else 0 )
+                    testEnc.encodeLayer(indexes, 0, approx_data_in["scan_order"].get(param, 0),
+                                        enc_info.get("general_profile_idc", 0) if enc_info else 0,
+                                        enc_info.get('parent_node_id_present_flag', 0) if enc_info else 0,
+                                        0, np.zeros(quantizedValues.shape[0], dtype=np.int32), *hdsp_opts, 0, 0
+                                        )
                     bs_par_cb = bytearray( testEnc.finish().tobytes() )
 
                     bytesCb = len(bs_par_cb) + get_codebook_bytes(codebook, codebookOffset, egk)
@@ -202,6 +234,7 @@ def approx(approx_info, model_info, approx_data_in, param_opt=0):
                         approx_data_out["codebook_zero_offsets"][param] = codebookOffset
                         approx_data_out['codebooks_egk'][param] = egk
                     else:
+                        print(f"INFO: Fallback to uniform quantization since results in smaller bitstream size ({bytesUni} bytes vs. {bytesCb} bytes)")
                         if approx_info['dq_flag'][param] == 1:
                             if qp != enc_qp:
                                 print("INFO: QP for {} has been clipped from {} to {} to avoid int32_t overflow!".format(param, approx_info['qp'][param],qp))

@@ -1,12 +1,12 @@
 /* -----------------------------------------------------------------------------
 The copyright in this software is being made available under the Clear BSD
-License, included below. No patent rights, trademark rights and/or 
-other Intellectual Property Rights other than the copyrights concerning 
+License, included below. No patent rights, trademark rights and/or
+other Intellectual Property Rights other than the copyrights concerning
 the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
+Copyright (c) 2019-2025, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -57,7 +57,7 @@ enum QuantType
   TCQ8States = 1,
 };
 
-uint32_t quantize(float32_t *weights, int32_t *level, const float32_t qstep, const int32_t stride, const int32_t numTotal, const DistType distType, const double lambdaScale, const uint8_t dq_flag, const uint32_t maxNumNoRem, const int32_t scan_order);
+uint32_t quantize(float32_t *weights, int32_t *level, const float32_t qstep, const int32_t stride, const int32_t numTotal, const DistType distType, const double lambdaScale, const uint8_t dq_flag, const uint32_t maxNumNoRem, const int32_t scan_order, uint8_t general_profile_idc=0);
 void deQuantize( float32_t* weights, int32_t* level, const float32_t qstep, const uint32_t numWeights, const int32_t stride, const int32_t scan_order );
 
 

@@ -1,12 +1,12 @@
 /* -----------------------------------------------------------------------------
 The copyright in this software is being made available under the Clear BSD
-License, included below. No patent rights, trademark rights and/or 
-other Intellectual Property Rights other than the copyrights concerning 
+License, included below. No patent rights, trademark rights and/or
+other Intellectual Property Rights other than the copyrights concerning
 the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
+Copyright (c) 2019-2025, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -43,6 +43,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #define __CONTEXTMODELER__
 
 #include "TypeDef.h"
+#include "HdspOpts.h"
 
 class ContextModeler
 {
@@ -50,15 +51,23 @@ public:
     ContextModeler()  {}
     ~ContextModeler() {}
 public:
-    void    init              ();
+    void    init              (uint32_t cabac_unary_length=10);
     void    resetNeighborCtx  ();
     int32_t getSigCtxId       ( int32_t stateId );
     int32_t getSignFlagCtxId  ();
 
     int32_t getGtxCtxId       ( int32_t currWeighVal, uint32_t numGtxFlagsCoded, int32_t stateId );
-    void    updateNeighborCtx ( int32_t currWeightVal );
+    void    updateNeighborCtx ( int32_t currWeightVal, uint32_t posInMat, uint32_t layerWidth );
+    void    updateHdspEnabled     ( bool hdspHist );
+    void    updateBaseMdlCtx  ( int32_t baseModelWeight );
+
 private:
     int32_t neighborWeightVal;
+    int32_t baseModelWeightVal;
+    uint32_t m_cabac_unary_length;
+    bool useBaseMdl;
+    bool  hdspEnabledAtPos; 
+
 };
 
 #endif // __CONTEXTMODELER__

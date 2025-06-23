@@ -1,12 +1,12 @@
 /* -----------------------------------------------------------------------------
 The copyright in this software is being made available under the Clear BSD
-License, included below. No patent rights, trademark rights and/or 
-other Intellectual Property Rights other than the copyrights concerning 
+License, included below. No patent rights, trademark rights and/or
+other Intellectual Property Rights other than the copyrights concerning
 the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
+Copyright (c) 2019-2025, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -36,8 +36,6 @@ BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
 IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
-
-
 ------------------------------------------------------------------------------------------- */
 #include <algorithm>
 #include <array>
@@ -256,7 +254,7 @@ namespace TCQ
       {
         //CHECK for Possible int32_t overflow
         double scaledVal = round(weights[scanIterator.posInMat()] * scale);
-        if (int64_t(scaledVal) > ((int64_t(1) << 31) - 3) || int64_t(scaledVal) < (-(int64_t(1) << 31) - 2))
+        if (scaledVal > ((1 << 31) - 3) || scaledVal < (-((1 << 31) - 2)))
         {
           return 0;
         }
@@ -305,17 +303,34 @@ public:
   double  operator()( int32_t           level   ) { return 0.0; }
 };
 
+class StupidRate
+{
+public:
+  struct pars { 
+  };
+public:
+  // the constructor and the functions must have exactly this form
+  StupidRate( int32_t stateId, const pars& p ) {}
+  void    copyCtx   ( const StupidRate* other   ) {}                  
+  void    updateCtx ( int32_t           level   ) {}
+  double  operator()( int32_t           level   ) { return double((level+!!level)<<15); }
+};
+
 class CabacRate : protected TCABACEncoder<BinEst>
 {
 public:
   struct pars { 
-    //int layerwidth;
+    int layerwidth;
     uint32_t maxNumNoRem;
+    uint8_t generalProfileIdc;
   };
 public:
   // the constructor and the functions must have exactly this form
   CabacRate( int32_t stateId, const pars& p ) 
     : m_stateId( stateId )
+    , m_layerWidth( p.layerwidth )
+    , m_numCoded( 0 )
+    , m_generalProfileIdc(p.generalProfileIdc)
   {
     TCABACEncoder<BinEst>::xInitCtxModels( p.maxNumNoRem );
     m_CtxModeler.resetNeighborCtx();
@@ -323,11 +338,13 @@ public:
   void    copyCtx   ( const CabacRate*  other   ) 
   {
     m_CtxStore = other->m_CtxStore;
+    m_numCoded = other->m_numCoded;
   }                  
-  void    updateCtx ( int32_t           level   ) 
+  void    updateCtx ( int32_t           level   ) //TODO upate BaseCtx
   {
-    TCABACEncoder<BinEst>::xEncWeight<&BinEst::updateBin>( level, m_stateId ); 
-    m_CtxModeler.updateNeighborCtx( level );
+    TCABACEncoder<BinEst>::xEncWeight<&BinEst::updateBin>( level, m_stateId, m_generalProfileIdc ); 
+    m_CtxModeler.updateNeighborCtx( level, m_numCoded, m_layerWidth );
+    m_numCoded++;
   }
   double  operator()( int32_t           level   ) 
   { 
@@ -335,28 +352,30 @@ public:
   }
 private:
   const int32_t m_stateId;
+  const int     m_layerWidth;
+  uint32_t      m_numCoded;
+  uint8_t       m_generalProfileIdc;
 };
 
 template <class trellisDef, DistType distType>
-uint32_t quantizeTCQ(const float32_t *weights, int32_t *level, const float32_t qstep, const int32_t stride, const int32_t numTotal, const double lambdaFactor, const uint32_t maxNumNoRem, const int32_t scan_order)
+uint32_t quantizeTCQ(const float32_t *weights, int32_t *level, const float32_t qstep, const int32_t stride, const int32_t numTotal, const double lambdaFactor, const uint32_t maxNumNoRem, const int32_t scan_order, uint8_t general_profile_idc=0)
 {
   if( lambdaFactor <= 0.0 )
   {
     return TCQ::TCQ<trellisDef, distType, IgnoreRate>::quant(weights, level, numTotal, stride, qstep, 0.0, {}, scan_order);
   }
-  return TCQ::TCQ<trellisDef, distType, CabacRate>::quant(weights, level, numTotal, stride, qstep, lambdaFactor, {maxNumNoRem}, scan_order);
+  return TCQ::TCQ<trellisDef, distType, CabacRate>::quant(weights, level, numTotal, stride, qstep, lambdaFactor, {stride, maxNumNoRem, general_profile_idc}, scan_order);
 }
 
 template <class trellisDef>
-uint32_t quantizeTCQ(const float32_t *weights, int32_t *level, const float32_t qstep, const int32_t stride, const int32_t numTotal, const DistType distType, const double lambdaScale, const uint32_t maxNumNoRem, const int32_t scan_order)
+uint32_t quantizeTCQ(const float32_t *weights, int32_t *level, const float32_t qstep, const int32_t stride, const int32_t numTotal, const DistType distType, const double lambdaScale, const uint32_t maxNumNoRem, const int32_t scan_order, uint8_t general_profile_idc=0)
 {
   if( distType == DIST_MSE )
   {
     const double lambdaFactor = lambdaScale * 4.0 * ( log( 2. ) / 6. ) * 0.7; // the last 0.7 seems to be a special TCQ thing
-    return quantizeTCQ<trellisDef, DIST_MSE>(weights, level, qstep, stride, numTotal, lambdaFactor, maxNumNoRem, scan_order);
+    return quantizeTCQ<trellisDef, DIST_MSE>(weights, level, qstep, stride, numTotal, lambdaFactor, maxNumNoRem, scan_order, general_profile_idc);
   }
   assert( !"Unsupported DistType" );
-  return 0;
 }
 
 template <DistType distType>
@@ -372,7 +391,7 @@ uint32_t quantizeURQ(float32_t *weights, int32_t *level, const float32_t qstep, 
     {
       double scaledVal = round(scale * weights[scanIterator.posInMat()]);
 
-      if (int64_t(scaledVal) > (int64_t(1) << 31) - 1 || int64_t(scaledVal) < (-int64_t(1) << 31) )  
+      if (scaledVal > ((1 << 31) - 1) || scaledVal < (-(1 << 31)) ) 
       {
         return 0; //check for int32_t overflow
       }
@@ -387,11 +406,11 @@ uint32_t quantizeURQ(float32_t *weights, int32_t *level, const float32_t qstep, 
   const double        distScale    = double(1<<15) / lambdaFactor;
   const double        qscale       = 1.0 / qstep;
   TCQ::Dist<distType> dist         ( distScale );
-  CabacRate           rateEst      ( 0, {maxNumNoRem } );
+  CabacRate           rateEst      ( 0, { stride, maxNumNoRem } );
   for (int i = 0; i < numTotal; i++)
   {
     const double scaledVal = round(weights[scanIterator.posInMat()] * qscale);
-    if (int64_t(scaledVal) > (int64_t(1) << 31) - 1 || int64_t(scaledVal) < (-int64_t(1) << 31) )
+    if (scaledVal > ((1 << 31) - 1) || scaledVal < (-(1 << 31)))
     {
       return 0; //check for int32_t overflow
     }
@@ -422,13 +441,12 @@ uint32_t quantizeURQ(float32_t *weights, int32_t *level, const float32_t qstep, 
 {
   if( distType == DIST_MSE )
   {
-    return quantizeURQ<DIST_MSE>(weights, level, qstep, stride, numTotal, lambdaScale, maxNumNoRem, scan_order);
+     return quantizeURQ<DIST_MSE>(weights, level, qstep, stride, numTotal, lambdaScale, maxNumNoRem, scan_order);
   }
   assert( !"Unsupported DistType" );
-  return 0;
 }
 
-uint32_t quantize(float32_t *weights, int32_t *level, const float32_t qstep, const int32_t stride, const int32_t numTotal, const DistType distType, double lambdaScale, const uint8_t dq_flag, const uint32_t maxNumNoRem, const int32_t scan_order)
+uint32_t quantize(float32_t *weights, int32_t *level, const float32_t qstep, const int32_t stride, const int32_t numTotal, const DistType distType, double lambdaScale, const uint8_t dq_flag, const uint32_t maxNumNoRem, const int32_t scan_order, uint8_t general_profile_idc)
 {
   assert( weights && qstep > 0.0 && stride > 0 );
 
@@ -440,10 +458,9 @@ uint32_t quantize(float32_t *weights, int32_t *level, const float32_t qstep, con
   }
   if( qtype == TCQ8States )
   {
-    return quantizeTCQ<Trellis8States>(weights, level, qstep, stride, numTotal, distType, lambdaScale, maxNumNoRem, scan_order);
+    return quantizeTCQ<Trellis8States>(weights, level, qstep, stride, numTotal, distType, lambdaScale, maxNumNoRem, scan_order, general_profile_idc);
   }
   assert( !"Unsupported TCQType" );
-  return 0;
 }
 
 
@@ -453,7 +470,7 @@ void deQuantize( float32_t* weights, int32_t* level, const float32_t qstep, cons
 
   Scan scanIterator(ScanType(scan_order), numWeights, stride);
 
-  for (uint32_t i = 0; i < numWeights; i++)
+  for (int i = 0; i < numWeights; i++)
   {
     weights[scanIterator.posInMat()] = qstep * float32_t(level[scanIterator.posInMat()]);
     scanIterator++;

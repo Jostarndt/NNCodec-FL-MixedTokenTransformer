@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
+Copyright (c) 2019-2025, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -39,13 +39,15 @@ POSSIBILITY OF SUCH DAMAGE.
 '''
 import copy
 import sys
+from collections import OrderedDict
 import numpy as np
 from . import baseline
 from . import codebook
 from . import integer
-from ... import nnc_core
-from src.nncodec.nnc_core.nnr_model import NNRModelAccess, NNRBlockAccess, W_TYPES
-from .. import hls
+from nncodec import nnc_core
+from nncodec.nnc_core.nnr_model import NNRModelAccess, NNRBlockAccess, W_TYPES
+from nncodec.nnc_core import hls
+from nncodec.nnc_core.common import get_qp_from_stepsize
 from timeit import default_timer as timer
 
 def __print_output_line( outputString, verbose=True ):
@@ -110,8 +112,11 @@ def init_approx_data(
     return approx_data
 
         
-def fold_bn(model_info, approx_data, ap_info):
+def fold_bn(model_info, approx_data, ap_info, bnf_mapping=False):
     model_access = NNRModelAccess(model_info)
+    if bnf_mapping:
+        model_info["bnf_map"] = OrderedDict({k: k for k in approx_data["parameters"].keys()})
+        model_info["mdl_blocks"] = {}
     for block_access in model_access.blocks_and_params():
         block_id = block_access.block_id
         if block_id is None:
@@ -149,6 +154,22 @@ def fold_bn(model_info, approx_data, ap_info):
             del_param(approx_data, ap_info.approx_info, block_access.bn_mean)
             del_param(approx_data, ap_info.approx_info, block_access.bn_beta)
             approx_data["compressed_parameter_types"][block_id] -= hls.BlockParameterTypes.NNR_CPT_BN
+
+            if bnf_mapping:
+                model_info["mdl_blocks"][block_id] = {k: getattr(block_access, k) for k in dir(block_access)
+                                                      if isinstance(getattr(block_access, k), str) and not k.startswith('_')}
+                del model_info["bnf_map"][block_access.bn_var]
+                del model_info["bnf_map"][block_access.bn_mean]
+                model_info["bnf_map"][block_access.bn_beta] = delta
+                model_info["bnf_map"][block_access.bn_gamma] = alpha
+
+        elif bnf_mapping:
+            model_info["mdl_blocks"][block_id] = {k: getattr(block_access, k) for k in dir(block_access)
+                                                  if isinstance(getattr(block_access, k), str) and not k.startswith('_')}
+    if bnf_mapping:
+        model_info["bnf_map"] = {model_info["bnf_map"][k]: k for k in model_info["parameter_type"]
+                                  if k in model_info["bnf_map"]} # re-ordering
+        return model_info
 
             
 def unfold_bn(model_info, approx_data):
@@ -449,7 +470,7 @@ def inference_based_qp_opt(
     approx_info.update(approx_info_qp)
 
 
-def run_ft_and_lsa(model_info, approx_data, ap_info, model_executer, block_id_and_param_type, lsa_flag, ft_flag, use_dq, verbose):
+def run_ft_and_lsa(model_info, approx_data, ap_info, model_executer, block_id_and_param_type, lsa_flag, ft_flag, use_dq, verbose, wandb_logging):
     approx_info_ft = copy.deepcopy(ap_info.approx_info)
     if not lsa_flag:
         approx_info_ft["to_approximate"] = W_TYPES
@@ -464,6 +485,8 @@ def run_ft_and_lsa(model_info, approx_data, ap_info, model_executer, block_id_an
         lsa_flag=lsa_flag,
         ft_flag=ft_flag,
         verbose=verbose,
+        wandb_logging=wandb_logging
+
     )
     
     lsa_params = tuned_params[0]
@@ -474,21 +497,22 @@ def run_ft_and_lsa(model_info, approx_data, ap_info, model_executer, block_id_an
     if lsa_flag:
         if block_id_and_param_type:
             nnc_core.approximator.set_lsa(model_info, approx_data, lsa_params)
-            nnc_core.nnr_model.add_lsa_to_block_id_and_param_type(block_id_and_param_type, lsa_params)
+            nnc_core.nnr_model.add_lsa_to_block_id_and_param_type( block_id_and_param_type, lsa_params )
         else:
             approx_data["parameters"].update(lsa_params)
         ap_info.set_ls_qps(model_info, approx_data, 1 if use_dq else 0)
 
 
-def approx(approx_info, model_info, approx_data, param_opt=0):
+def approx(approx_info, model_info, approx_data, enc_info=None):
+
     approx_method = approx_info['approx_method']
     
-    approx_data = integer.skip_approx(approx_info, model_info, approx_data)
+    approx_data = integer.skip_approx( approx_info, model_info, approx_data )
 
     if approx_method == 'codebook':
-        approx_data, approx_info = codebook.approx(approx_info, model_info, approx_data, param_opt)
+        approx_data, approx_info = codebook.approx(approx_info, model_info, approx_data, enc_info=enc_info)
 
-    return baseline.approx(approx_info, model_info, approx_data)
+    return baseline.approx(approx_info, model_info, approx_data, enc_info=enc_info)
     
 
 def rec(approx_data):
@@ -503,6 +527,15 @@ def rec(approx_data):
             else:
                 assert param not in approx_data["approx_method"], "unknown approx_method"
 
+def check_array_all_zero_or_scalar(x):
+    if np.isscalar(x):
+        return isinstance(x, (int, np.integer))
+    elif isinstance(x, np.ndarray) and x.ndim == 0:
+        return isinstance(x.item(), (int, np.integer))
+    elif isinstance(x, np.ndarray) and np.all(x == 0):
+        return True
+    else:
+        return False
 
 class ApproxInfo():
     def __init__(
@@ -518,6 +551,7 @@ class ApproxInfo():
         lambda_scale,
         nonweight_qp=None,
         qp_per_tensor=None,
+        int_quant_bw=False
     ):
         self.__approx_info = {
             "approx_method": "codebook" if codebook_mode > 0 else approx_method,
@@ -534,18 +568,33 @@ class ApproxInfo():
             self.__qp_other = nonweight_qp if nonweight_qp else qp - (2 << qp_density)  # same as dividing the stepsize by 4
             self.__qp_lsa = nonweight_qp if nonweight_qp else qp - (2 << qp_density)#qp - (8 << qp_density)
             self.approx_info["qp"] = {}
-            for x in approx_data["parameters"]:
-                if x not in model_info["parameter_index"] and (x.endswith("_G") or x.endswith("_H")):
-                    assert model_info["parameter_type"][x[:-2]] in nnc_core.nnr_model.W_TYPES, "Unexpected."
-                    self.approx_info["qp"][x] = qp
-                else:
-                    self.approx_info["qp"][x] = qp if model_info["parameter_type"][x] in nnc_core.nnr_model.W_TYPES else self.qp_other
-            if qp_per_tensor is not None:
-                assert type(qp_per_tensor) is dict, "qp_per_tensor must be a dict!"  
+            if not int_quant_bw:
                 for x in approx_data["parameters"]:
-                    self.approx_info["qp"][x] = qp_per_tensor.get(x, self.approx_info["qp"][x])
-            if opt_qp:
-                self._modify_qp(approx_data, model_info)
+                    if x not in model_info["parameter_index"] and (x.endswith("_G") or x.endswith("_H")):
+                        assert model_info["parameter_type"][x[:-2]] in nnc_core.nnr_model.W_TYPES, "Unexpected."
+                        self.approx_info["qp"][x] = qp
+                    else:
+                        self.approx_info["qp"][x] = qp if model_info["parameter_type"][x] in nnc_core.nnr_model.W_TYPES else self.qp_other
+                if qp_per_tensor is not None:
+                    assert type(qp_per_tensor) is dict, "qp_per_tensor must be a dict!"
+                    for x in approx_data["parameters"]:
+                        self.approx_info["qp"][x] = qp_per_tensor.get(x, self.approx_info["qp"][x])
+                if opt_qp:
+                    self._modify_qp(approx_data, model_info)
+            else:
+                uint_support = True  # allows unsigned integer types, if params contain only positive values
+                self.approx_info["integer_aligned_bitdepth"] = int_quant_bw
+                self.approx_info["unsigned_integer_support"] = uint_support
+                for x in approx_data["parameters"]:
+                    if check_array_all_zero_or_scalar(approx_data["parameters"][x]):#".num_batches_tracked" in x or np.sum(approx_data["parameters"][x]) == 0:
+                        self.approx_info["qp"][x] = np.int32(0)
+                    else:
+                        bw = int_quant_bw if int_quant_bw > 7 or model_info["parameter_type"][x] in W_TYPES else 8 # non-weight params at least in 8bit
+                        self.approx_info["qp"][x] = self._get_intaligned_qp(param=approx_data["parameters"][x],
+                                                                            qp_density=qp_density,
+                                                                            bw=bw,
+                                                                            uint_support=uint_support)
+
 
     @property
     def qp_lsa(self):
@@ -574,7 +623,22 @@ class ApproxInfo():
                     self.approx_info["qp"][x] = qp
                 else:
                     self.approx_info["qp"][x] = self.qp_other
-    
+
+    def _get_intaligned_qp(self, param, qp_density, bw, uint_support):
+        if uint_support and len(param[param < 0]) == 0:
+            denom = 2 ** bw - 1
+        else:
+            denom = 2 ** (bw - 1) - 1
+        step_size = np.percentile(abs(param), 99.95) / denom
+        if step_size == 0:
+            step_size = np.max(abs(param)) / denom
+        qp = get_qp_from_stepsize(step_size, qp_density)
+        max_qp = 2 ** (6 + qp_density - 1)
+        if qp < -max_qp or qp > max_qp - 1:
+            print(f"INFO QP {qp} clipped to [{-max_qp},{max_qp - 1}]")
+            qp = qp.clip(-max_qp, max_qp - 1)
+        return np.int32(np.round(qp))
+
     def _modify_qp(self, approx_data, model_info):
         param_types = ["weight"]#["fc.weight", "conv.weight"]
         param_names = []

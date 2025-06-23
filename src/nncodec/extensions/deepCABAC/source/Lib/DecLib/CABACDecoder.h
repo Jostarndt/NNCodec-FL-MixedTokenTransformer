@@ -1,12 +1,12 @@
 /* -----------------------------------------------------------------------------
 The copyright in this software is being made available under the Clear BSD
-License, included below. No patent rights, trademark rights and/or 
-other Intellectual Property Rights other than the copyrights concerning 
+License, included below. No patent rights, trademark rights and/or
+other Intellectual Property Rights other than the copyrights concerning
 the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
+Copyright (c) 2019-2025, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -43,6 +43,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #define __CABACDEC__
 
 #include <vector>
+#include <algorithm>
 
 #include "CommonLib/ContextModel.h"
 #include "CommonLib/ContextModeler.h"
@@ -62,24 +63,26 @@ public:
     uint32_t terminateCabacDecoding();
     int32_t  iae_v                 ( uint8_t v );
     uint32_t uae_v                 ( uint8_t v );
-    void decodeWeights             ( int32_t* pWeights, uint32_t layerWidth, uint32_t numWeights, uint8_t dq_flag, const int32_t scan_order );
 
-    template <class trellisDef>
-    void decodeWeights             (int32_t *pWeights, uint32_t layerWidth, uint32_t numWeights, uint8_t dq_flag, const int32_t scan_order);
+    void decodeWeights             ( int32_t* pWeights, uint32_t layerWidth, uint32_t numWeights, uint8_t dq_flag, const int32_t scan_order, uint8_t general_profile_idc, uint8_t parent_node_id_present_flag, uint32_t codebook_size, uint32_t codebook_zero_offset, const HdspOpts& hdspOpts );
+    void decodeWeightsAndCreateEPs(int32_t *pWeights, uint32_t layerWidth, uint32_t numWeights, uint8_t dq_flag, const int32_t scan_order, uint8_t general_profile_idc, uint8_t parent_node_id_present_flag, std::vector<uint64_t>& entryPoints, uint32_t codebook_size, uint32_t codebook_zero_offset, const HdspOpts& hdspOpts );
 
-    void decodeWeightsAndCreateEPs(int32_t *pWeights, uint32_t layerWidth, uint32_t numWeights, uint8_t dq_flag, const int32_t scan_order, std::vector<uint64_t>& entryPoints);
-
-    template <class trellisDef>
-    void decodeWeightsAndCreateEPs(int32_t *pWeights, uint32_t layerWidth, uint32_t numWeights, uint8_t dq_flag, const int32_t scan_order, std::vector<uint64_t> &entryPoints);
-
+    void decodeWeights2             ( int32_t* pWeights, int32_t* pWeightsBase, uint32_t layerWidth, uint32_t numWeights, uint8_t dq_flag, const int32_t scan_order, uint8_t general_profile_idc, uint8_t parent_node_id_present_flag, uint32_t codebook_size, uint32_t codebook_zero_offset, const HdspOpts& hdspOpts );
+    void decodeWeightsAndCreateEPs2(int32_t *pWeights, int32_t* pWeightsBase, uint32_t layerWidth, uint32_t numWeights, uint8_t dq_flag, const int32_t scan_order, uint8_t general_profile_idc, uint8_t parent_node_id_present_flag, std::vector<uint64_t>& entryPoints, uint32_t codebook_size, uint32_t codebook_zero_offset, const HdspOpts& hdspOpts);
+    
     void setEntryPoints           (uint64_t* pEntryPoints, uint64_t numEntryPoints);
 
 uint32_t
 getBytesRead();
 
 protected:
-    void decodeWeightVal           ( int32_t &decodedIntVal, int32_t stateId  );
+
+  template <class trellisDef,bool bCreateEntryPoints,bool bPrevCtx >
+  void decodeWeightsBase(int32_t* pWeights,int32_t* pWeightsBase,uint32_t layerWidth,uint32_t numWeights,uint8_t dq_flag,const int32_t scan_order,uint8_t general_profile_idc,uint8_t parent_node_id_present_flag,std::vector<uint64_t>& entryPoints, uint32_t codebook_size, uint32_t codebook_zero_offset, const HdspOpts& hdspOpts);
+
+    void decodeWeightVal           ( int32_t &decodedIntVal, int32_t stateId, uint8_t general_profile_idc, uint32_t codebook_size=0, uint32_t codebook_zero_offset=0 );
     int32_t decodeRemAbsLevel      ();
+    void xShiftParameterIds         ( uint8_t dq_flag, bool useTca, bool useHdsp, uint32_t codebook_size, uint32_t codebook_zero_offset );
 
 private:
     std::vector<SBMPCtx>  m_CtxStore;

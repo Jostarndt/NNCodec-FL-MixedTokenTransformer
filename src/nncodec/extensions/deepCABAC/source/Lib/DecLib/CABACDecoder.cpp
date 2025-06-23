@@ -1,12 +1,12 @@
 /* -----------------------------------------------------------------------------
 The copyright in this software is being made available under the Clear BSD
-License, included below. No patent rights, trademark rights and/or 
-other Intellectual Property Rights other than the copyrights concerning 
+License, included below. No patent rights, trademark rights and/or
+other Intellectual Property Rights other than the copyrights concerning
 the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
+Copyright (c) 2019-2025, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -42,24 +42,23 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CABACDecoder.h"
 #include <iostream>
 
-
-void CABACDecoder::startCabacDecoding( uint8_t* pBytestream )
+void CABACDecoder::startCabacDecoding(uint8_t *pBytestream)
 {
-    m_BinDecoder.setByteStreamBuf( pBytestream );
-    m_BinDecoder.startBinDecoder();
+  m_BinDecoder.setByteStreamBuf(pBytestream);
+  m_BinDecoder.startBinDecoder();
 }
 
 void CABACDecoder::initCtxMdls(uint32_t cabac_unary_length)
 {
-    m_NumGtxFlags = cabac_unary_length;
+  m_NumGtxFlags = cabac_unary_length;
 
-    m_CtxStore.resize(8 * 3 + 3 + m_NumGtxFlags * 2 + 32 + 4);
+  m_CtxStore.resize(8 * 6 + 5 + m_NumGtxFlags * 4 + 32 + 5);
 
-    for (uint32_t ctxId = 0; ctxId < m_CtxStore.size(); ctxId++)
-    {
-      m_CtxStore[ctxId].initState();
-    }
-    m_CtxModeler.init();
+  for (uint32_t ctxId = 0; ctxId < m_CtxStore.size(); ctxId++)
+  {
+    m_CtxStore[ctxId].initState();
+  }
+  m_CtxModeler.init(cabac_unary_length);
 }
 
 void CABACDecoder::resetCtxMdls()
@@ -70,89 +69,245 @@ void CABACDecoder::resetCtxMdls()
   }
 }
 
-int32_t CABACDecoder::iae_v( uint8_t v )
+int32_t CABACDecoder::iae_v(uint8_t v)
 {
-    uint32_t pattern = m_BinDecoder.decodeBinsEP( v );
-    return int32_t( pattern << (32-v) ) >> (32-v);
+  uint32_t pattern = m_BinDecoder.decodeBinsEP(v);
+  return int32_t(pattern << (32 - v)) >> (32 - v);
 }
 
-uint32_t CABACDecoder::uae_v( uint8_t v )
+uint32_t CABACDecoder::uae_v(uint8_t v)
 {
-    return m_BinDecoder.decodeBinsEP( v );
+  return m_BinDecoder.decodeBinsEP(v);
 }
 
-template<class trellisDef>
-void CABACDecoder::decodeWeights( int32_t* pWeights, uint32_t layerWidth, uint32_t numWeights, uint8_t dq_flag, const int32_t scan_order )
+void CABACDecoder::xShiftParameterIds( uint8_t dq_flag, bool useTca, bool useHdsp, uint32_t codebook_size, uint32_t codebook_zero_offset )
+{
+  int32_t offset_sign       = 48;
+  int32_t offset_grX        = 53;
+  int32_t offset_grX2       = 53 + 4* m_NumGtxFlags;
+  uint8_t bestEcoIdx = 0;
+  
+  for(int i = 0; i < (dq_flag ? 24 : 3); i++)
+  {
+    bestEcoIdx = 0;
+    if ( codebook_size != 1 )
+    {
+      if (m_BinDecoder.decodeBin(m_CtxStore[8 * 6 + 5 + m_NumGtxFlags * 4 + 32 + 2]))
+      {
+        bestEcoIdx += (1 + m_BinDecoder.decodeBinsEP(3));
+      }
+    }
+    m_CtxStore[i].initState(bestEcoIdx);
+  }
+
+  if(useTca)
+  {
+    for(int i = 24; i < (dq_flag ? 40 : 26); i++)
+    {
+      bestEcoIdx = 0;
+
+      if( codebook_size != 1 )
+      {
+        if (m_BinDecoder.decodeBin(m_CtxStore[8 * 6 + 5 + m_NumGtxFlags * 4 + 32 + 2]))
+        {
+          bestEcoIdx += (1 + m_BinDecoder.decodeBinsEP(3));
+        }
+      }
+      m_CtxStore[i].initState(bestEcoIdx);
+    }
+  }
+
+  if( useHdsp )
+  {
+    for(int i = 40; i < (dq_flag ? 48 : 41); i++)
+    {
+      bestEcoIdx = 0;
+
+      if( codebook_size != 1 )
+      {
+        if (m_BinDecoder.decodeBin(m_CtxStore[8 * 6 + 5 + m_NumGtxFlags * 4 + 32 + 2]))
+        {
+          bestEcoIdx += (1 + m_BinDecoder.decodeBinsEP(3));
+        }
+      }
+      m_CtxStore[i].initState(bestEcoIdx);
+    }
+  }
+
+  int i = 0;
+  for( int a = 0; a < (useTca ? 5 : 3) ; a++)
+  {
+    bestEcoIdx = 0; 
+    i = offset_sign + a;
+    if( !(codebook_size > 0 && (codebook_zero_offset == 0 || codebook_zero_offset == codebook_size - 1)) && codebook_size != 1 )
+    {
+      if (m_BinDecoder.decodeBin(m_CtxStore[8 * 6 + 5 + m_NumGtxFlags * 4 + 32 + 2]))
+      {
+        bestEcoIdx += (1 + m_BinDecoder.decodeBinsEP(3));
+      }
+    }
+    m_CtxStore[i].initState(bestEcoIdx);
+  }
+  
+  int64_t maxAbsVal = codebook_size > 0 ? std::max( codebook_zero_offset, codebook_size -1 -codebook_zero_offset ) : - 1;
+  for( int a = 0; a < 2*m_NumGtxFlags;  a++)
+  {
+    bestEcoIdx = 0;
+    i = offset_grX + a;
+    if( maxAbsVal == -1 || a < (maxAbsVal * 2) )
+    {
+      if (m_BinDecoder.decodeBin(m_CtxStore[8 * 6 + 5 + m_NumGtxFlags * 4 + 32 + 2]))
+      {
+        bestEcoIdx += (1 + m_BinDecoder.decodeBinsEP(3));
+      }
+    }
+    m_CtxStore[i].initState(bestEcoIdx);
+  }
+
+  if(useTca)
+  {
+    for( int a = 2*m_NumGtxFlags; a < 4*m_NumGtxFlags;  a++)
+    {
+      bestEcoIdx = 0;
+      i = offset_grX + a;
+      if( maxAbsVal == -1 || a < ( (maxAbsVal-1)*2 + (2*m_NumGtxFlags) ) )
+      {
+      if (m_BinDecoder.decodeBin(m_CtxStore[8 * 6 + 5 + m_NumGtxFlags * 4 + 32 + 2]))
+        {
+          bestEcoIdx += (1 + m_BinDecoder.decodeBinsEP(3));
+        }
+      }
+      m_CtxStore[i].initState(bestEcoIdx);
+    }
+  }
+
+  int64_t currX2Level = m_NumGtxFlags - 1;
+  for( int a = 0; a < 31; a++ )
+  {
+    bestEcoIdx = 0;
+    i = offset_grX2 + a;
+    currX2Level += (1 << a);
+    if( maxAbsVal == -1 || currX2Level < maxAbsVal )
+    {
+      if (m_BinDecoder.decodeBin(m_CtxStore[8 * 6 + 5 + m_NumGtxFlags * 4 + 32 + 2]))
+      {
+        bestEcoIdx += (1 + m_BinDecoder.decodeBinsEP(3));
+      }
+    }
+     m_CtxStore[i].initState(bestEcoIdx);
+  }
+}
+
+template <class trellisDef,bool bCreateEntryPoints,bool bPrevCtx >
+void CABACDecoder::decodeWeightsBase(int32_t* pWeights, int32_t* pWeightsBase, uint32_t layerWidth,uint32_t numWeights,uint8_t dq_flag,const int32_t scan_order,uint8_t general_profile_idc,uint8_t parent_node_id_present_flag,std::vector<uint64_t>& entryPoints, uint32_t codebook_size, uint32_t codebook_zero_offset, const HdspOpts& hdspOpts)
 {
   typename trellisDef::stateTransTab sttab = trellisDef::getStateTransTab();
 
-  for (int i = 0; i < m_CtxStore.size() - 4; i++)
+  std::vector<int32_t> chanSkip;
+  uint8_t rowSkipFlag = 0;
+  uint8_t hist_dep_sig_prob_enabled_flag = 0;
+
+  if(general_profile_idc == 1 && layerWidth > 1 && numWeights > layerWidth && codebook_size != 1)
   {
-    if (!dq_flag && (i > 2 && i < 24))
+    if(parent_node_id_present_flag)
     {
-      continue; //skip unused context models, when DQ is disabled
+       hist_dep_sig_prob_enabled_flag = m_BinDecoder.decodeBinEP();
     }
+    rowSkipFlag = m_BinDecoder.decodeBinEP();
 
-    uint8_t bestEcoIdx = 0;
-
-    if (m_BinDecoder.decodeBin(m_CtxStore[8 * 3 + 3 + m_NumGtxFlags * 2 + 32 + 2]))
+    if( rowSkipFlag )
     {
-      bestEcoIdx += (1 + m_BinDecoder.decodeBinsEP(3));
-    }
+      int32_t numRows = numWeights / layerWidth;
+      int32_t skipRow = 0;
 
-    m_CtxStore[i].initState(bestEcoIdx);
+      for(int row = 0; row < numRows; row++)
+      {
+        skipRow = m_BinDecoder.decodeBin(m_CtxStore[8 * 6 + 5 + m_NumGtxFlags * 4 + 32 + 4]);
+        chanSkip.push_back(skipRow);
+      }
+    }
   }
+
+  xShiftParameterIds(dq_flag, bPrevCtx, hist_dep_sig_prob_enabled_flag, codebook_size, codebook_zero_offset);
 
   m_CtxModeler.resetNeighborCtx();
   int32_t stateId = 0;
 
-  Scan scanIterator(ScanType(scan_order), numWeights, layerWidth);
+  Scan scanIterator(ScanType(scan_order),numWeights,layerWidth);
 
-  if( scan_order != 0 )
+  uint64_t lastBitOffset = 0;
+  if(!bCreateEntryPoints && scan_order != 0 && !entryPoints.empty())
   {
-    if( true )
+    uint32_t bytesReadBefore = m_BinDecoder.getBytesRead();
+    uint8_t* byteStreamPtrBefore = m_BinDecoder.getByteStreamPtr();
+    uint8_t* byteStreamPtrAfter = nullptr;
+    EntryPoint firstEp = m_BinDecoder.getEntryPoint();
+    firstEp.dqState = stateId;
+
+    lastBitOffset = firstEp.totalBitOffset;
+    // convert from differential entry points to absolute entry points
+    for(int epIdx = 0; epIdx < entryPoints.size(); epIdx++)
     {
-      uint32_t bytesReadBefore = m_BinDecoder.getBytesRead();
-      uint8_t *byteStreamPtrBefore = m_BinDecoder.getByteStreamPtr();
-      uint8_t *byteStreamPtrAfter = nullptr;
-      EntryPoint firstEp = m_BinDecoder.getEntryPoint();
-      firstEp.dqState = stateId;
-      
-      uint64_t lastBitOffset = firstEp.totalBitOffset;
-      // convert from differential entry points to absolute entry points
-      for (int epIdx = 0; epIdx < m_EntryPoints.size(); epIdx++)
-      {
-        EntryPoint ep;
-        ep.setEntryPointInt(m_EntryPoints[epIdx]);
-        ep.totalBitOffset += lastBitOffset;
-        lastBitOffset = ep.totalBitOffset;
-        m_EntryPoints[epIdx] = ep.getEntryPointInt();
-      }
-      m_EntryPoints.insert(m_EntryPoints.begin(), firstEp.getEntryPointInt());
-        
-      EntryPoint finalEntryPoint;
+      EntryPoint ep;
+      ep.setEntryPointInt(entryPoints[epIdx]);
+      ep.totalBitOffset += lastBitOffset;
+      lastBitOffset = ep.totalBitOffset;
+      entryPoints[epIdx] = ep.getEntryPointInt();
+    }
+    entryPoints.insert(entryPoints.begin(),firstEp.getEntryPointInt());
 
-      for (int epIdx = m_EntryPoints.size()-1; epIdx >= 0; epIdx--)
-      {
-        //int epIdx2 = epIdx == -1 ? m_EntryPoints.size() - 1 : epIdx;
-        scanIterator.seekBlockRow(epIdx);
-        EntryPoint ep;
-        ep.setEntryPointInt(m_EntryPoints[epIdx]);
-        m_BinDecoder.setEntryPoint(ep);
-        stateId = ep.dqState;
-        resetCtxMdls();
-        m_CtxModeler.resetNeighborCtx();
+    EntryPoint finalEntryPoint;
 
-        while (true)
+    for(int epIdx = (int)entryPoints.size() - 1; epIdx >= 0; epIdx--)
+    {
+      //int epIdx2 = epIdx == -1 ? m_EntryPoints.size() - 1 : epIdx;
+      scanIterator.seekBlockRow(epIdx);
+      EntryPoint ep;
+      ep.setEntryPointInt(entryPoints[epIdx]);
+      m_BinDecoder.setEntryPoint(ep);
+      stateId = ep.dqState;
+      resetCtxMdls();
+      m_CtxModeler.resetNeighborCtx(); //TODO HAASE: WHAT ABPUT THIS?
+
+      int32_t skipRow = 0;
+
+      while(true)
+      {
+        if(general_profile_idc == 1 && rowSkipFlag && layerWidth > 1 && numWeights > layerWidth&& scanIterator.isFirstPositionOfRowInBlock() && codebook_size != 1)
+        {
+          uint32_t currRow = scanIterator.getRow();
+
+          skipRow = chanSkip.at(currRow);
+          if(skipRow)
+          {
+            scanIterator.seekRowEndOfCurrBlockAndReturnInc();
+            if(dq_flag)
+            {
+              for(int a = 0; a <= (int)layerWidth - 1; a++)
+              {
+                stateId = sttab[stateId][0];
+              }
+            }
+          }
+        }
+        if(!skipRow || general_profile_idc == 0)
         {
           pWeights[scanIterator.posInMat()] = 0;
-          decodeWeightVal(pWeights[scanIterator.posInMat()], stateId);
-          m_CtxModeler.updateNeighborCtx(pWeights[scanIterator.posInMat()]);
-          if (dq_flag)
+          if(bPrevCtx && general_profile_idc == 1)
+          {
+            m_CtxModeler.updateBaseMdlCtx(pWeightsBase[scanIterator.posInMat()]);
+          }
+          if(general_profile_idc == 1)
+          {
+            m_CtxModeler.updateHdspEnabled( hist_dep_sig_prob_enabled_flag == 1 && hdspOpts.getEnabledAt( scanIterator.posInMat()   )  );
+          }
+          decodeWeightVal(pWeights[scanIterator.posInMat()],stateId, general_profile_idc, codebook_size, codebook_zero_offset);
+          m_CtxModeler.updateNeighborCtx(pWeights[scanIterator.posInMat()],scanIterator.posInMat(),layerWidth);
+          if(dq_flag)
           {
             int32_t newState = sttab[stateId][pWeights[scanIterator.posInMat()] & 1];
 
-            if (pWeights[scanIterator.posInMat()] != 0)
+            if(pWeights[scanIterator.posInMat()] != 0)
             {
               pWeights[scanIterator.posInMat()] <<= 1;
               pWeights[scanIterator.posInMat()] += pWeights[scanIterator.posInMat()] < 0 ? (stateId & 1) : -(stateId & 1);
@@ -160,144 +315,146 @@ void CABACDecoder::decodeWeights( int32_t* pWeights, uint32_t layerWidth, uint32
 
             stateId = newState;
           }
-          if (scanIterator.isLastPosOfBlockRow())
-          {
-            if(epIdx == m_EntryPoints.size()-1) //last Entry Point
-            {
-              finalEntryPoint = m_BinDecoder.getEntryPoint();
-              byteStreamPtrAfter = m_BinDecoder.getByteStreamPtr();
-            }
-            break;
-          }
-          scanIterator++;
         }
+        if(scanIterator.isLastPosOfBlockRow())
+        {
+          if(epIdx == entryPoints.size() - 1) //last Entry Point
+          {
+            finalEntryPoint = m_BinDecoder.getEntryPoint();
+            byteStreamPtrAfter = m_BinDecoder.getByteStreamPtr();
+          }
+          break;
+        }
+        scanIterator++;
       }
+    }
 
-      m_BinDecoder.setByteStreamPtr(byteStreamPtrAfter);
-      m_BinDecoder.setBytesRead( bytesReadBefore + ( byteStreamPtrAfter - byteStreamPtrBefore ) );
-      m_BinDecoder.setEntryPointWithRange(finalEntryPoint);
-    }
-    else
-    {
-      CHECK(true, "Entry point vector is empty!");
-    }
+    m_BinDecoder.setByteStreamPtr(byteStreamPtrAfter);
+    m_BinDecoder.setBytesRead(uint32_t(bytesReadBefore + (byteStreamPtrAfter - byteStreamPtrBefore)));
+    m_BinDecoder.setEntryPointWithRange(finalEntryPoint);
   }
   else
   {
-    for (int i = 0 ; i < numWeights; i++)
-    {    
-      pWeights[scanIterator.posInMat()] = 0;
-      decodeWeightVal(pWeights[scanIterator.posInMat()], stateId);
-
-      m_CtxModeler.updateNeighborCtx(pWeights[scanIterator.posInMat()] );
-
-      if(dq_flag)
-      {
-        int32_t newState = sttab[stateId][pWeights[scanIterator.posInMat()] & 1];
-
-        if (pWeights[scanIterator.posInMat()] != 0)
-        {
-          pWeights[scanIterator.posInMat()] <<= 1;
-          pWeights[scanIterator.posInMat()] += pWeights[scanIterator.posInMat()] < 0 ? (stateId & 1) : -(stateId & 1);
-        }
-
-        stateId = newState;
-      }
-
-      scanIterator++;
-    }
-  }
-}
-
-void CABACDecoder::decodeWeights(int32_t *pWeights, uint32_t layerWidth, uint32_t numWeights, uint8_t dq_flag, const int32_t scan_order)
-{
-  const QuantType qtype = QuantType( dq_flag );
-  
-  if (qtype == URQ || qtype == TCQ8States)
-  {
-    return decodeWeights<Trellis8States>( pWeights, layerWidth, numWeights, dq_flag, scan_order );
-  }
-  assert( !"Unsupported TCQType" );
-}
-
-template <class trellisDef>
-void CABACDecoder::decodeWeightsAndCreateEPs(int32_t *pWeights, uint32_t layerWidth, uint32_t numWeights, uint8_t dq_flag, const int32_t scan_order, std::vector<uint64_t>& entryPoints)
-{
-  typename trellisDef::stateTransTab sttab = trellisDef::getStateTransTab();
-
-  for (int i = 0; i < m_CtxStore.size() - 4; i++)
-  {
-    if (!dq_flag && (i > 2 && i < 24))
+    if(bCreateEntryPoints && scan_order != 0)
     {
-      continue; //skip unused context models, when DQ is disabled
-    }
-
-    uint8_t bestEcoIdx = 0;
-
-    if (m_BinDecoder.decodeBin(m_CtxStore[8 * 3 + 3 + m_NumGtxFlags * 2 + 32 + 2]))
-    {
-      bestEcoIdx += (1 + m_BinDecoder.decodeBinsEP(3));
-    }
-
-    m_CtxStore[i].initState(bestEcoIdx);
-  }
-
-  m_CtxModeler.resetNeighborCtx();
-  int32_t stateId = 0;
-
-  Scan scanIterator(ScanType(scan_order), numWeights, layerWidth);
-
-  uint64_t lastBitOffset = 0;
-  if (scan_order != 0)
-  {
-    m_BinDecoder.entryPointStart();
-    EntryPoint ep = m_BinDecoder.getEntryPoint();
-    ep.dqState = stateId;
-    lastBitOffset = ep.totalBitOffset;
-  }
-  for (int i = 0; i < numWeights; i++)
-  {
-    pWeights[scanIterator.posInMat()] = 0;
-    decodeWeightVal(pWeights[scanIterator.posInMat()], stateId);
-
-    m_CtxModeler.updateNeighborCtx(pWeights[scanIterator.posInMat()] );
-
-    if (dq_flag)
-    {
-      int32_t newState = sttab[stateId][pWeights[scanIterator.posInMat()] & 1];
-
-      if (pWeights[scanIterator.posInMat()] != 0)
-      {
-        pWeights[scanIterator.posInMat()] <<= 1;
-        pWeights[scanIterator.posInMat()] += pWeights[scanIterator.posInMat()] < 0 ? (stateId & 1) : -(stateId & 1);
-      }
-
-      stateId = newState;
-    }
-    if (scanIterator.isLastPosOfBlockRowButNotLastPosOfBlock())
-    {
-      resetCtxMdls();
-      m_CtxModeler.resetNeighborCtx();
       m_BinDecoder.entryPointStart();
       EntryPoint ep = m_BinDecoder.getEntryPoint();
       ep.dqState = stateId;
-      uint64_t deltaOffset = ep.totalBitOffset - lastBitOffset;
       lastBitOffset = ep.totalBitOffset;
-      ep.totalBitOffset = deltaOffset;
-      entryPoints.push_back(ep.getEntryPointInt());
     }
 
-    scanIterator++;
+    int32_t skipRow = 0;
+
+    for(int i = 0; i < (int)numWeights;)
+    {
+      if(general_profile_idc == 1 && rowSkipFlag && layerWidth > 1 && numWeights > layerWidth&& scanIterator.isFirstPositionOfRowInBlock() && codebook_size != 1)
+      {
+        uint32_t currRow = scanIterator.getRow();
+
+        skipRow = chanSkip.at(currRow);
+        if(skipRow)
+        {
+          i += scanIterator.seekRowEndOfCurrBlockAndReturnInc();
+          if(dq_flag)
+          {
+            for(int a = 0; a <= (int)layerWidth - 1; a++)
+            {
+              stateId = sttab[stateId][0];
+            }
+          }
+        }
+      }
+
+      if(!skipRow || general_profile_idc == 0) 
+      {
+        pWeights[scanIterator.posInMat()] = 0;
+        if(bPrevCtx && general_profile_idc == 1)
+        { 
+          m_CtxModeler.updateBaseMdlCtx(pWeightsBase[scanIterator.posInMat()]);
+        }
+        if(general_profile_idc == 1)
+        {
+          m_CtxModeler.updateHdspEnabled( hist_dep_sig_prob_enabled_flag == 1 && hdspOpts.getEnabledAt( scanIterator.posInMat()   )  );
+        }
+        decodeWeightVal(pWeights[scanIterator.posInMat()],stateId, general_profile_idc, codebook_size, codebook_zero_offset);
+
+        m_CtxModeler.updateNeighborCtx(pWeights[scanIterator.posInMat()],scanIterator.posInMat(),layerWidth);
+
+        if(dq_flag)
+        {
+          int32_t newState = sttab[stateId][pWeights[scanIterator.posInMat()] & 1];
+
+          if(pWeights[scanIterator.posInMat()] != 0)
+          {
+            pWeights[scanIterator.posInMat()] <<= 1;
+            pWeights[scanIterator.posInMat()] += pWeights[scanIterator.posInMat()] < 0 ? (stateId & 1) : -(stateId & 1);
+          }
+
+          stateId = newState;
+        }
+      }
+
+      if(bCreateEntryPoints && scanIterator.isLastPosOfBlockRowButNotLastPosOfBlock())
+      {
+        resetCtxMdls();
+        m_CtxModeler.resetNeighborCtx();
+        m_BinDecoder.entryPointStart();
+        EntryPoint ep = m_BinDecoder.getEntryPoint();
+        ep.dqState = stateId;
+        uint64_t deltaOffset = ep.totalBitOffset - lastBitOffset;
+        lastBitOffset = ep.totalBitOffset;
+        ep.totalBitOffset = deltaOffset;
+        entryPoints.push_back(ep.getEntryPointInt());
+      }
+
+      scanIterator++;
+      i++;
+    }
   }
 }
 
-void CABACDecoder::decodeWeightsAndCreateEPs(int32_t *pWeights, uint32_t layerWidth, uint32_t numWeights, uint8_t dq_flag, const int32_t scan_order, std::vector<uint64_t>& entryPoints)
+
+void CABACDecoder::decodeWeights(int32_t *pWeights, uint32_t layerWidth, uint32_t numWeights, uint8_t dq_flag, const int32_t scan_order, uint8_t general_profile_idc, uint8_t parent_node_id_present_flag, uint32_t codebook_size, uint32_t codebook_zero_offset, const HdspOpts& hdspOpts)
 {
   const QuantType qtype = QuantType(dq_flag);
 
   if (qtype == URQ || qtype == TCQ8States)
   {
-    return decodeWeightsAndCreateEPs<Trellis8States>(pWeights, layerWidth, numWeights, dq_flag, scan_order, entryPoints);
+    return decodeWeightsBase<Trellis8States,false,false >(pWeights,nullptr,layerWidth,numWeights,dq_flag,scan_order,general_profile_idc, parent_node_id_present_flag, m_EntryPoints, codebook_size, codebook_zero_offset, hdspOpts); 
+  }
+  assert(!"Unsupported TCQType");
+}
+
+void CABACDecoder::decodeWeights2(int32_t *pWeights, int32_t *pWeightsBase, uint32_t layerWidth, uint32_t numWeights, uint8_t dq_flag, const int32_t scan_order, uint8_t general_profile_idc, uint8_t parent_node_id_present_flag, uint32_t codebook_size, uint32_t codebook_zero_offset, const HdspOpts& hdspOpts)
+{
+  const QuantType qtype = QuantType(dq_flag);
+
+  if (qtype == URQ || qtype == TCQ8States)
+  {
+    return decodeWeightsBase<Trellis8States,false,true>(pWeights, pWeightsBase, layerWidth, numWeights, dq_flag, scan_order, general_profile_idc, parent_node_id_present_flag, m_EntryPoints, codebook_size, codebook_zero_offset, hdspOpts);
+  }
+  assert(!"Unsupported TCQType");
+}
+
+
+void CABACDecoder::decodeWeightsAndCreateEPs(int32_t *pWeights, uint32_t layerWidth, uint32_t numWeights, uint8_t dq_flag, const int32_t scan_order, uint8_t general_profile_idc, uint8_t parent_node_id_present_flag, std::vector<uint64_t> &entryPoints, uint32_t codebook_size, uint32_t codebook_zero_offset, const HdspOpts& hdspOpts)
+{
+  const QuantType qtype = QuantType(dq_flag);
+
+  if (qtype == URQ || qtype == TCQ8States)
+  {
+    return decodeWeightsBase<Trellis8States, true, false >( pWeights, nullptr, layerWidth,  numWeights, dq_flag,  scan_order,  general_profile_idc,  parent_node_id_present_flag, entryPoints, codebook_size, codebook_zero_offset, hdspOpts );
+  }
+  assert(!"Unsupported TCQType");
+}
+
+void CABACDecoder::decodeWeightsAndCreateEPs2(int32_t *pWeights, int32_t *pWeightsBase, uint32_t layerWidth, uint32_t numWeights, uint8_t dq_flag, const int32_t scan_order, uint8_t general_profile_idc, uint8_t parent_node_id_present_flag, std::vector<uint64_t> &entryPoints, uint32_t codebook_size, uint32_t codebook_zero_offset, const HdspOpts& hdspOpts)
+{
+  const QuantType qtype = QuantType(dq_flag);
+
+  if (qtype == URQ || qtype == TCQ8States)
+  {
+    return decodeWeightsBase<Trellis8States, true, true >( pWeights, pWeightsBase, layerWidth,  numWeights, dq_flag,  scan_order,  general_profile_idc, parent_node_id_present_flag, entryPoints, codebook_size, codebook_zero_offset, hdspOpts );
   }
   assert(!"Unsupported TCQType");
 }
@@ -306,58 +463,94 @@ void CABACDecoder::setEntryPoints(uint64_t *pEntryPoints, uint64_t numEntryPoint
 {
   m_EntryPoints.resize(numEntryPoints);
 
-  for(int i = 0; i < m_EntryPoints.size(); i++)
+  for (int i = 0; i < m_EntryPoints.size(); i++)
   {
     m_EntryPoints[i] = pEntryPoints[i];
   }
 }
 
-void CABACDecoder::decodeWeightVal( int32_t& decodedIntVal, int32_t stateId )
-{
-    int32_t sigctx = m_CtxModeler.getSigCtxId( stateId );
-    uint32_t sigFlag = m_BinDecoder.decodeBin(m_CtxStore[ sigctx ]);
+void CABACDecoder::decodeWeightVal(int32_t &decodedIntVal, int32_t stateId, uint8_t general_profile_idc, uint32_t codebook_size, uint32_t codebook_zero_offset)
+{ 
+  if( general_profile_idc == 0 ||  codebook_size != 1 )
+  {
+    int32_t sigctx = m_CtxModeler.getSigCtxId(stateId);
+    uint32_t sigFlag = m_BinDecoder.decodeBin(m_CtxStore[sigctx]);
 
     if (sigFlag)
     {
-        decodedIntVal++;
-        uint32_t signFlag = 0;
-        int32_t signCtx = m_CtxModeler.getSignFlagCtxId();
-        signFlag = m_BinDecoder.decodeBin(m_CtxStore[ signCtx ]);
+      decodedIntVal++;
+      uint32_t signFlag = 0; //SignVal
+      int32_t signCtx = m_CtxModeler.getSignFlagCtxId();
 
-        int32_t intermediateVal = signFlag ? -1 : 1;
+      if( general_profile_idc == 1 && (codebook_size > 0 && (codebook_zero_offset == 0 || codebook_zero_offset == codebook_size -1)) )
+      {
+        signFlag = codebook_zero_offset != 0 ? 1 : 0;
+      }
+      else
+      {
+        signFlag = m_BinDecoder.decodeBin(m_CtxStore[signCtx]);
+      }
 
-        int32_t ctxIdx = m_CtxModeler.getGtxCtxId(intermediateVal, 0, stateId);
-        uint32_t grXFlag = 0;
+      int32_t intermediateVal = signFlag ? -1 : 1;
 
-        grXFlag = m_BinDecoder.decodeBin(m_CtxStore[ ctxIdx ]); //greater1
 
-        uint32_t numGreaterFlagsDecoded = 1;
 
-        while( grXFlag && (numGreaterFlagsDecoded < m_NumGtxFlags) )
+      uint32_t grXFlag = 0;
+
+      int32_t j = -1;
+
+      int64_t maxAbsVal = 0; 
+      if(general_profile_idc == 1 && codebook_size > 0)
+      {
+        maxAbsVal = signFlag ? codebook_zero_offset : ( codebook_size - codebook_zero_offset - 1 );
+      }
+      else
+      {
+        maxAbsVal = -1;
+      }
+
+      if( maxAbsVal > 1 || maxAbsVal == -1 )
+      {
+        int32_t ctxIdx = 0;
+        
+        do{
+          j++;
+          ctxIdx = m_CtxModeler.getGtxCtxId(intermediateVal, j, stateId);
+          grXFlag = m_BinDecoder.decodeBin(m_CtxStore[ctxIdx]);
+          decodedIntVal += grXFlag;
+        } while( grXFlag == 1 && j < m_NumGtxFlags-1 && ( maxAbsVal > decodedIntVal || maxAbsVal == -1 ) );
+
+        if( grXFlag == 1 && (maxAbsVal > decodedIntVal || maxAbsVal == -1) )
         {
-            decodedIntVal++;
-            ctxIdx =  m_CtxModeler.getGtxCtxId(intermediateVal, numGreaterFlagsDecoded, stateId);
-            grXFlag = m_BinDecoder.decodeBin(m_CtxStore[ ctxIdx ]);
-            numGreaterFlagsDecoded++;
-        }
+          uint32_t RemBits = 0;
+          j = -1;
 
-        if( grXFlag )
-        {
-            decodedIntVal++;
-            uint32_t remAbsLevel = decodeRemAbsLevel( );
-            decodedIntVal += remAbsLevel;
+          do{
+            j++;
+
+            ctxIdx = (8 * 6 + 5 + m_NumGtxFlags * 4) + j;
+            grXFlag = m_BinDecoder.decodeBin(m_CtxStore[ctxIdx]);
+            if(grXFlag && (maxAbsVal > decodedIntVal || maxAbsVal == -1))
+            {
+              decodedIntVal += 1 << RemBits;
+              RemBits++;
+            }
+          }while( grXFlag == 1 && j < 30 && ( maxAbsVal >= ( decodedIntVal + ( 1 << RemBits ) ) || maxAbsVal == -1 ) );
+
+          decodedIntVal += (int32_t)m_BinDecoder.decodeBinsEP(RemBits);
         }
-        decodedIntVal = signFlag ? -decodedIntVal : decodedIntVal;
+      }
+      decodedIntVal = signFlag ? -decodedIntVal : decodedIntVal;
     }
+  }
 }
 
 int32_t CABACDecoder::decodeRemAbsLevel()
 {
-  int32_t  remAbsLevel = 0;
+  int32_t remAbsLevel = 0;
   uint32_t log2NumElemNextGroup = 0;
-  uint32_t ctxIdx = (8*3 + 3 + m_NumGtxFlags*2);
-
-  if( m_BinDecoder.decodeBin( m_CtxStore[ ctxIdx ] ) )
+  uint32_t ctxIdx = (8 * 6 + 5 + m_NumGtxFlags * 4);
+  if (m_BinDecoder.decodeBin(m_CtxStore[ctxIdx]))
   {
     remAbsLevel += (1 << log2NumElemNextGroup);
     ctxIdx++;
@@ -368,14 +561,14 @@ int32_t CABACDecoder::decodeRemAbsLevel()
     return remAbsLevel;
   }
 
-  while( m_BinDecoder.decodeBin( m_CtxStore[ ctxIdx ] ) )
+  while (m_BinDecoder.decodeBin(m_CtxStore[ctxIdx]))
   {
     remAbsLevel += (1 << log2NumElemNextGroup);
     ctxIdx++;
     log2NumElemNextGroup++;
   }
 
-  remAbsLevel += (int32_t)m_BinDecoder.decodeBinsEP( log2NumElemNextGroup );
+  remAbsLevel += (int32_t)m_BinDecoder.decodeBinsEP(log2NumElemNextGroup);
   return remAbsLevel;
 }
 
@@ -386,7 +579,7 @@ uint32_t CABACDecoder::getBytesRead()
 
 uint32_t CABACDecoder::terminateCabacDecoding()
 {
-  if( m_BinDecoder.decodeBinTrm() )
+  if (m_BinDecoder.decodeBinTrm())
   {
     m_BinDecoder.finish();
     return m_BinDecoder.getBytesRead();

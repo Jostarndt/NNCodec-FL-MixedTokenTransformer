@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
+Copyright (c) 2019-2025, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -38,4 +38,9 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 '''
 
-from .imagenet import ImageNetDataset
+from .imagenet import imagenet200, imagenet1000
+from .cifar import cifar10, cifar100
+from .voc2012 import voc
+from .Berlin_V2X import V2X
+
+__all__ = ['imagenet200', 'imagenet1000', 'cifar10', 'cifar100', 'voc', 'V2X']

@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
+Copyright (c) 2019-2025, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -37,7 +37,7 @@ IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 '''
-
+import numpy as np
 import torch
 
 def get_topk_accuracy_per_batch(output, target, topk=(1,)):
@@ -56,3 +56,17 @@ def get_topk_accuracy_per_batch(output, target, topk=(1,)):
             res.append(correct_k.mul_(100.0 / batch_size))
 
         return res
+
+
+def get_pmf(quant_tensor):
+    """
+    Calculates the probabilitiy mass function (pmf) which here simply is the number of weights assigned to a
+    specific centroid devided by th number of all weights.
+    """
+    _, C_cts = np.unique(quant_tensor, return_counts=True)
+    return C_cts / quant_tensor.size
+
+def get_entropy(quant_tensor):
+    """ Calculates the entropy of a quantized weight tensor."""
+    pmf = get_pmf(quant_tensor)
+    return sum([-P * np.log2(P) for P in pmf if P != 0])

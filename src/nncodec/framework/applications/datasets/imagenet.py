@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
+Copyright (c) 2019-2025, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -40,19 +40,11 @@ POSSIBILITY OF SUCH DAMAGE.
 import os
 
 import pandas as pd
-from torchvision import datasets, transforms
-
-from src.nncodec.framework.applications import settings
+from torchvision import datasets
+from nncodec.framework.applications.utils.transforms import transforms_pyt_model_zoo
+from nncodec.framework.applications import settings
 
 VALIDATION_FILES = os.path.join(settings.METADATA_DIR, 'imagenet_validation_files.txt')
-
-transforms_pyt_model_zoo = transforms.Compose([
-    transforms.Resize(256),
-    transforms.CenterCrop(224),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                         std=[0.229, 0.224, 0.225]),
-])
 
 class ImageNetDataset(datasets.ImageFolder):
     def __init__(self, root, *args, validate=False, train=True, use_precomputed_labels=False,
@@ -97,7 +89,7 @@ class ImageNetDataset(datasets.ImageFolder):
             self.targets = [x[1] for x in self.samples]
 
 
-def imagenet_dataloaders(root, split='test'):
+def imagenet1000(root, split='test'):
 
     if split == 'train':
         train_data = ImageNetDataset(root=root,
@@ -119,3 +111,18 @@ def imagenet_dataloaders(root, split='test'):
                                     validate=False
                                     )
         return test_data
+
+def imagenet200(root, split='test'):
+    if split == 'train':
+        traindir = os.path.join(root, 'train')
+        train_data = datasets.ImageFolder(traindir,
+                                          transform=transforms_pyt_model_zoo
+                                          )
+        return train_data
+
+    elif split == 'val' or split == 'test':
+        valdir = os.path.join(root, 'val')
+        val_test_data = datasets.ImageFolder(valdir,
+                                             transform=transforms_pyt_model_zoo
+                                             )
+        return val_test_data

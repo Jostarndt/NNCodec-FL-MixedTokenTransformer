@@ -1,12 +1,12 @@
 /* -----------------------------------------------------------------------------
 The copyright in this software is being made available under the Clear BSD
-License, included below. No patent rights, trademark rights and/or 
-other Intellectual Property Rights other than the copyrights concerning 
+License, included below. No patent rights, trademark rights and/or
+other Intellectual Property Rights other than the copyrights concerning
 the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
+Copyright (c) 2019-2025, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -141,12 +141,70 @@ public:
         m_currPosInMat = m_currScanIndex;
     }
     
+    uint32_t getRow()
+    {
+        return m_PosY;
+    }
+
+    void seekRow(int row)
+    {   
+        if(row < m_height)
+        {
+            m_PosX = 0;
+            m_PosY = row;
+            m_currScanIndex = m_PosY * m_stride;
+            m_currPosInMat = m_currScanIndex;
+        }
+        else
+        {
+            m_PosX = m_stride -1;
+            m_PosY = m_height-1;
+            m_currScanIndex = m_PosY * m_stride + m_PosX;
+            m_currPosInMat = m_currScanIndex;
+        }
+    }
+
+    uint32_t seekRowEndOfCurrBlockAndReturnInc()
+    {     
+        uint32_t posXIncrease = m_BlockWidth - (m_PosX % m_BlockWidth) - 1;
+            
+        posXIncrease = m_PosX + posXIncrease < m_stride ? posXIncrease : ( m_stride- 1 - m_PosX);
+
+        m_PosX += posXIncrease;
+        //m_PosY = row;
+        m_currScanIndex += posXIncrease;
+        m_currPosInMat = m_PosY * m_stride + m_PosX;
+
+        return posXIncrease;
+    }
+
+    uint32_t isFirstPositionOfRowInBlock()
+    {
+        return (m_PosX % m_BlockWidth == 0 ? 1 : 0);
+    }
+
     void     resetScan()
     {
         m_PosX = 0;
         m_PosY = 0;
         m_currScanIndex = 0;
         m_currPosInMat = 0;
+    }
+
+    uint32_t getNumOfBlockRows()
+    {
+        if(m_scanType == MATRIX_SCAN || m_stride == m_numWeights)
+        {
+            return 0;
+        }
+        if( (m_height % m_BlockHeight) != 0 )
+        {
+            return (uint32_t)(m_height / m_BlockHeight) +1 ;
+        }
+        else
+        {
+            return (uint32_t)(m_height / m_BlockHeight);
+        }
     }
 
 private:

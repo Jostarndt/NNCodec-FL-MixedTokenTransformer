@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
+Copyright (c) 2019-2025, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -39,14 +39,10 @@ POSSIBILITY OF SUCH DAMAGE.
 '''
 import copy
 import numpy as np
-import deepCABAC
-from ... import nnc_core
-from src.nncodec.nnc_core.nnr_model import NNRModelAccess
-from src.nncodec.nnc_core.coder import hls, baseline
-from .. import common
+from nncodec.extensions import deepCABAC
+from nncodec.nnc_core.nnr_model import NNRModelAccess, W_TYPES
 
-
-def approx(approx_info, model_info, approx_data_in):
+def approx(approx_info, model_info, approx_data_in, enc_info=None):
     approx_data_out = {k: copy.copy(v) for k, v in approx_data_in.items()} # create copies of dicts in approx_data
     encoder = deepCABAC.Encoder()
     model_access = NNRModelAccess(model_info)
@@ -69,7 +65,8 @@ def approx(approx_info, model_info, approx_data_in):
                     enc_qp,
                     approx_info["lambda_scale"],
                     approx_info["cabac_unary_length_minus1"],
-                    approx_data_in["scan_order"].get(param, 0)
+                    approx_data_in["scan_order"].get(param, 0),
+                    enc_info.get("general_profile_idc", 0) if enc_info else 0
                 )
 
                 if qp != enc_qp:
@@ -81,7 +78,16 @@ def approx(approx_info, model_info, approx_data_in):
                 approx_data_out['parameters'][param] = quantizedValues
                 approx_data_out['approx_method'][param] = 'uniform'
                 approx_data_out['dq_flag'][param] = approx_info['dq_flag'][param]
-   
+
+                if "integer_aligned_bitdepth" in approx_info and ".num_batches_tracked" not in param:
+                    bw_ap = approx_info["integer_aligned_bitdepth"]
+                    bw = bw_ap if bw_ap > 7 or model_info["parameter_type"][param] in W_TYPES else 8 # non-weight params at least in 8bit
+                    prm = approx_data_in["parameters"][param]
+                    if approx_info["unsigned_integer_support"] and len(prm[prm < 0]) == 0:
+                        approx_data_out['parameters'][param] = quantizedValues.clip(0, 2 ** bw - 1)
+                    else:
+                        approx_data_out['parameters'][param] = quantizedValues.clip(-2 ** (bw - 1), 2 ** (bw - 1) - 1)
+
     return approx_data_out
 
 def rec(param, approx_data):

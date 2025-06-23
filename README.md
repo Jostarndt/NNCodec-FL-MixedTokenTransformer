@@ -1,16 +1,83 @@
-<img src="https://github.com/fraunhoferhhi/nncodec/assets/65648299/69b41b38-19ed-4c45-86aa-2b2cd4d835f7" width="518"/>
+<div align="center">
 
-# Fraunhofer Neural Network Encoder/Decoder (NNCodec)
+![nncodec_logo](https://github.com/d-becking/nncodec-icml-2023-demo/assets/56083075/f310c92e-537e-4960-b223-7ec51c9accc3)
 
-The Fraunhofer Neural Network Encoder/Decoder Software (NNCodec) is an efficient implementation of NNC (Neural Network Coding / ISO/IEC 15938-17 or MPEG-7 part 17), which is the first international standard on compression of neural networks.
+# A Software Implementation of the Neural Network Coding (NNC) Standard [ISO/IEC 15938-17] 
+
+</div>
+
+
+## Table of Contents
+- [Information](#information)
+- [Installation](#installation)
+- [NNCodec Usage](#nncodec-usage)
+  * [Paper results](#paper-results)
+- [Citation and Publications](#citation-and-publications)
+- [License](#license)
+
+## Information
+
+This repository hosts a beta version of NNCodec 2.0, which incorporates new compression tools for incremental neural 
+network data, as introduced in the second edition of the NNC standard. Additionally, it features a pipeline for coding 
+"Tensors in AI-based Media Processing" to address recent MPEG requirements for coding individual tensors rather than 
+entire neural networks or differential updates to a base neural network.
+
+The repository also includes a novel use case example demonstrating federated learning for tiny language models in a telecommunications application.
+
+The official NNCodec 1.0 git repository, which served as the foundation for this project, can be found here:
+
+[![Conference](https://img.shields.io/badge/fraunhoferhhi-nncodec-green)](https://github.com/fraunhoferhhi/nncodec)
+
+It also contains a [Wiki-Page](https://github.com/fraunhoferhhi/nncodec/wiki) providing further information on NNCodec. 
+
+Upon approval, this second version will update the official Git repository.
+
+### The Fraunhofer Neural Network Encoder/Decoder (NNCodec)
+The Fraunhofer Neural Network Encoder/Decoder Software (NNCodec) is an efficient implementation of NNC ([Neural Network Coding ISO/IEC 15938-17](https://www.iso.org/standard/85545.html)), 
+which is the first international standard for compressing (incremental) neural network data.
+
 NNCodec provides an encoder and decoder with the following main features:
-- Standard compliant implementation of the core compression technologies including, e.g., DeepCABAC
-- Easy-to-use user interface
-- Built-in support for common frameworks (e.g. TensorFlow and PyTorch)
-- Built-in ImageNet-support for data driven compression tools
-- Extensibility of data driven compression tools for arbitrary datasets
+- Standard-compliant implementation of the core compression technologies, including, e.g., DeepCABAC, quantization, and sparsification
+- User-friendly interface
+- Built-in support for common deep learning frameworks (e.g., PyTorch)
+- Integrated support for data-driven compression tools on common datasets (ImageNet, CIFAR, PascalVOC)
+- Built-in support for [Flower](https://flower.ai), a prominent and widely used Federated AI framework
+- Separate pipelines for Neural Network (NN) Coding, Tensor Coding, and Federated Learning
 
-## Highlights
+
+## Installation
+
+### Requirements
+
+- python >= 3.8 with working pip
+- **Windows:** Microsoft Visual Studio 2015 Update 3 or later
+
+### Package installation
+
+NNCodec V2 supports pip installation:
+
+```bash
+pip install nncodec
+```
+
+After installation the software can be used by importing the main module:
+```python
+import nncodec
+```
+
+## NNCodec Usage
+
+### [TBD]
+
+#### Logging (comparative) results using Weights & Biases
+
+We used Weights & Biases (wandb) for experiment logging. Enabling `--wandb` also enables Huffman and bzip2 encoding of the data payloads and the calculation of the Shannon entropy. If you want to use it, add your wandb key and optionally an experiment identifier for the run (--wandb_run_name).
+
+```shell
+--wandb, --wandb_key, --wandb_run_name
+```
+
+## Paper results
 
 
 - ### EuCNC 2025 Poster Session
@@ -23,7 +90,6 @@ NNCodec provides an encoder and decoder with the following main features:
     The codebase for reproducing experimental results and evaluating NNCodec in an FL environment is available here:
 
     [![Conference](https://img.shields.io/badge/EuCNC-Paper-blue)](https://arxiv.org/abs/2504.01947)
-    [![Conference](https://img.shields.io/badge/EuCNC-Code(soon)-red)](https://github.com/d-becking/nncodec-fl-eucnc-2025)
 
 
 
@@ -37,70 +103,9 @@ ISO/IEC Standard"** was awarded a Spotlight Paper at the ICML 2023 Neural Compre
 here:
 
     [![Conference](https://img.shields.io/badge/ICML-Paper-blue)](https://openreview.net/forum?id=5VgMDKUgX0)
-    [![Conference](https://img.shields.io/badge/ICML-Code-red)](https://github.com/d-becking/nncodec-icml-2023-demo)
 
 
-## Information
-
-Refer to the [Wiki-Page](https://github.com/fraunhoferhhi/nncodec/wiki) for more information:
-- [Installation-Guide](https://github.com/fraunhoferhhi/nncodec/wiki/Installation-Guide)
-- [Usage](https://github.com/fraunhoferhhi/nncodec/wiki/Usage)
-- [Compression-Performance](https://github.com/fraunhoferhhi/nncodec/wiki/Compression-Performance)
-- [License](https://github.com/fraunhoferhhi/nncodec/wiki/License)
-- [References](https://github.com/fraunhoferhhi/nncodec/wiki/References)
-- [Version history](https://github.com/fraunhoferhhi/nncodec/wiki/Changelog)
-
-## Installation
-
-The software provides python packages which can be installed using pip. However, core technologies are implemented using C++, which requires a C++ compiler for the installation process.
-
-The software has been tested on different target platforms (Windows, Linux and MacOS).
-
-### Requirements
-
-- python >= 3.6 (recommended versions 3.6, 3.7 and 3.8) with working pip
-- **Windows:** Microsoft Visual Studio 2015 Update 3 or later
-
-### Package installation
-
-From the root of the cloned repository, issue
-
-```
-pip install wheel
-pip install -r requirements.txt
-pip install .
-```
-
-and for CUDA11 support
-
-```
-pip install wheel
-pip install -r requirements_cu11.txt
-pip install .
-```
-
-for installation.
-
-**Information**: On Linux/Mac the scripts `create_env.sh` and `create_env_cu11.sh` (for Cuda 11 support) set up a virtual python environment "env" and install all required packages and the software itself, automatically. For activating this environment, issue:
-
-```
-source env/bin/activate
-```
-
-**Note**: For further information on how to set up a virtual python environment (also on **Windows**) refer to https://docs.python.org/3/library/venv.html .
-
-When successfully installed, the software outputs the line : "Successfully installed NNC-0.3.1"
-
-### Importing the main module
-
-After installation the software can be used by importing the main python module 'nnc':
-
-```python
-
-from src.nncodec import nnc
-```
-
-## References and Publications
+## Citation and Publications
 If you use NNCodec in your work, please cite:
 ```
 @inproceedings{becking2023nncodec,
@@ -111,20 +116,13 @@ year={2023},
 url={https://openreview.net/forum?id=5VgMDKUgX0}
 }
 ```
-### Publications
+### Publications (chronological order)
 - D. Becking et al., **"Neural Network Coding of Difference Updates for Efficient Distributed Learning Communication"**, IEEE Transactions on Multimedia, vol. 26, pp. 6848–6863, 2024, doi: 10.1109/TMM.2024.3357198, Open Access
-- H. Kirchhoffer et al., **"Overview of the Neural Network Compression and Representation (NNR) Standard"**, IEEE Transactions on Circuits and Systems for Video Technology, pp. 1-14, July 2021, doi: 10.1109/TCSVT.2021.3095970, Open Access
-- P. Haase et al., **"Encoder Optimizations For The NNR Standard On Neural Network Compression"**, 2021 IEEE International Conference on Image Processing (ICIP), 2021, pp. 3522-3526, doi: 10.1109/ICIP42928.2021.9506655.
-- K. Müller et al., **"Ein internationaler KI-Standard zur Kompression Neuronaler Netze"**, FKT- Fachzeitschrift für Fernsehen, Film und Elektronische Medien, pp. 33-36, September 2021
+- D. Becking et al. **"NNCodec: An Open Source Software Implementation of the Neural Network Coding ISO/IEC Standard"**, 40th International Conference on Machine Learning (ICML), 2023, Neural Compression Workshop (Spotlight)
+- H. Kirchhoffer et al. **"Overview of the Neural Network Compression and Representation (NNR) Standard"**, IEEE Transactions on Circuits and Systems for Video Technology, pp. 1-14, July 2021, doi: 10.1109/TCSVT.2021.3095970, Open Access
+- P. Haase et al. **"Encoder Optimizations For The NNR Standard On Neural Network Compression"**, 2021 IEEE International Conference on Image Processing (ICIP), 2021, pp. 3522-3526, doi: 10.1109/ICIP42928.2021.9506655.
+- K. Müller et al. **"Ein internationaler KI-Standard zur Kompression Neuronaler Netze"**, FKT- Fachzeitschrift für Fernsehen, Film und Elektronische Medien, pp. 33-36, September 2021
 - S. Wiedemann et al., **"DeepCABAC: A universal compression algorithm for deep neural networks"**, in IEEE Journal of Selected Topics in Signal Processing, doi: 10.1109/JSTSP.2020.2969554.
-
-## Contributing
-
-Everyone is invited to contribute. To do so:
-- Fork the current-most state of the master branch
-- Implement features or changes
-- Add your name to [AUTHORS.md](./AUTHORS.md)
-- Create a pull-request to the upstream repository
 
 ## License
 
@@ -132,6 +130,6 @@ Please see [LICENSE.txt](./LICENSE.txt) file for the terms of the use of the con
 
 For more information and bug reports, please contact: nncodec@hhi.fraunhofer.de
 
-**Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.**
+**Copyright (c) 2019-2025, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.**
 
 **All rights reserved.**

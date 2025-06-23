@@ -1,12 +1,12 @@
 /* -----------------------------------------------------------------------------
 The copyright in this software is being made available under the Clear BSD
-License, included below. No patent rights, trademark rights and/or 
-other Intellectual Property Rights other than the copyrights concerning 
+License, included below. No patent rights, trademark rights and/or
+other Intellectual Property Rights other than the copyrights concerning
 the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
+Copyright (c) 2019-2025, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -56,18 +56,19 @@ class Encoder
 public:
   Encoder() { m_CABACEncoder.startCabacEncoding( &m_Bytestream ); }
   ~Encoder() {}
-  void                  initCtxModels(uint32_t cabac_unary_length_minus1, uint8_t param_opt_flag) { m_CABACEncoder.initCtxMdls(cabac_unary_length_minus1+1, param_opt_flag); }
+  void                  initCtxModels(uint32_t cabac_unary_length, uint8_t param_opt_flag) { m_CABACEncoder.initCtxMdls(cabac_unary_length, param_opt_flag); }
   void                  iae_v( uint8_t v, int32_t value )            { m_CABACEncoder.iae_v( v, value ); }
   void                  uae_v( uint8_t v, uint32_t value )           { m_CABACEncoder.uae_v( v, value ); }
-  uint32_t              encodeLayer( py::array_t<int32_t, py::array::c_style> qindex, uint8_t dq_flag, int32_t scan_order  );
-  int32_t               quantLayer( py::array_t<float32_t, py::array::c_style> Weights, py::array_t<int32_t, py::array::c_style> qIndex, uint8_t dq_flag, int32_t qpDensity, int32_t qp,float32_t lambdaScale, uint32_t maxNumNoRem, int32_t scan_order );
+  uint32_t              encodeLayer( py::array_t<int32_t, py::array::c_style> qindex, uint8_t dq_flag, int32_t scan_order, uint8_t general_profile_idc, uint8_t parent_node_id_present_flag, uint8_t rowSkipFlag, py::array_t<int32_t, py::array::c_style> ChanZeroList , HdspMode hdspMode, HdspPyAryType hdspHist , uint32_t codebook_size = 0, uint32_t codebook_zero_offset=0    );
+  uint32_t              encodeLayer2( py::array_t<int32_t, py::array::c_style> qindex, py::array_t<int32_t, py::array::c_style> baseWeights, uint8_t dq_flag, int32_t scan_order,  uint8_t general_profile_idc, uint8_t parent_node_id_present_flag, uint8_t rowSkipFlag, py::array_t<int32_t, py::array::c_style> ChanZeroList , HdspMode hdspMode, HdspPyAryType hdspHist , uint32_t codebook_size = 0, uint32_t codebook_zero_offset=0);
+  int32_t               quantLayer( py::array_t<float32_t, py::array::c_style> Weights, py::array_t<int32_t, py::array::c_style> qIndex, uint8_t dq_flag, int32_t qpDensity, int32_t qp,float32_t lambdaScale, uint32_t maxNumNoRem, int32_t scan_order, uint8_t general_profile_idc=0 );
   py::array_t<uint8_t>  finish();
 private:
   std::vector<uint8_t>  m_Bytestream;
   CABACEncoder          m_CABACEncoder;
 };
 
-int32_t Encoder::quantLayer(py::array_t<float32_t, py::array::c_style> Weights, py::array_t<int32_t, py::array::c_style> qIndex, uint8_t dq_flag, int32_t qpDensity, int32_t qp, float32_t lambdaScale, uint32_t maxNumNoRem, int32_t scan_order )
+int32_t Encoder::quantLayer(py::array_t<float32_t, py::array::c_style> Weights, py::array_t<int32_t, py::array::c_style> qIndex, uint8_t dq_flag, int32_t qpDensity, int32_t qp, float32_t lambdaScale, uint32_t maxNumNoRem, int32_t scan_order, uint8_t general_profile_idc )
 {
   py::buffer_info bi_Weights = Weights.request();
   py::buffer_info bi_qIndex = qIndex.request();
@@ -90,13 +91,13 @@ int32_t Encoder::quantLayer(py::array_t<float32_t, py::array::c_style> Weights, 
   int32_t shift = qp >> qpDensity;
   float32_t qStepSize = mul * pow(2.0, shift - qpDensity);
 
-  int32_t success = quantize(pWeights, pQIndex, qStepSize, layerWidth, numWeights, DIST_MSE, lambdaScale, dq_flag, maxNumNoRem, scan_order);
+  int32_t success = quantize(pWeights, pQIndex, qStepSize, layerWidth, numWeights, DIST_MSE, lambdaScale, dq_flag, maxNumNoRem, scan_order, general_profile_idc);
 
   if( !success )
   {
     float32_t maxAbs = 0.0;
 
-    for(uint32_t i = 0; i < numWeights; i++)
+    for(int i = 0; i < numWeights; i++)
     {
       if( abs( pWeights[i] ) > maxAbs )
       {
@@ -114,16 +115,19 @@ int32_t Encoder::quantLayer(py::array_t<float32_t, py::array::c_style> Weights, 
     shift = qp >> qpDensity;
     qStepSize = mul * pow(2.0, shift - qpDensity);
 
-    success = quantize(pWeights, pQIndex, qStepSize, layerWidth, numWeights, DIST_MSE, lambdaScale, dq_flag, maxNumNoRem, scan_order);
+    success = quantize(pWeights, pQIndex, qStepSize, layerWidth, numWeights, DIST_MSE, lambdaScale, dq_flag, maxNumNoRem, scan_order, general_profile_idc);
     CHECK( !success, "Prevention of integer-overflow failed!");
   }
   return qp;
 }
 
-uint32_t Encoder::encodeLayer( py::array_t<int32_t, py::array::c_style> qindex, uint8_t dq_flag, int32_t scan_order )
+uint32_t Encoder::encodeLayer( py::array_t<int32_t, py::array::c_style> qindex, uint8_t dq_flag, int32_t scan_order, uint8_t general_profile_idc, uint8_t parent_node_id_present_flag, uint8_t rowSkipFlag, py::array_t<int32_t, py::array::c_style> ChanZeroList, HdspMode hdspMode, HdspPyAryType hdspHist , uint32_t codebook_size, uint32_t codebook_zero_offset)
 {
   py::buffer_info bi_qindex = qindex.request();
   int32_t* pQindex          = (int32_t*) bi_qindex.ptr;
+
+  py::buffer_info bi_ChanZeroList = ChanZeroList.request();
+  int32_t* pChanZeroList = (int32_t*) bi_ChanZeroList.ptr;
 
   uint32_t layerWidth = 1;
   uint32_t numWeights = 1;
@@ -136,7 +140,32 @@ uint32_t Encoder::encodeLayer( py::array_t<int32_t, py::array::c_style> qindex, 
   if( layerWidth == 1 || numWeights == layerWidth )
       scan_order = 0;
 
-  return m_CABACEncoder.encodeWeights(pQindex, layerWidth, numWeights, dq_flag, scan_order);
+  return m_CABACEncoder.encodeWeights(pQindex, layerWidth, numWeights, dq_flag, scan_order, general_profile_idc, parent_node_id_present_flag, rowSkipFlag, pChanZeroList, codebook_size, codebook_zero_offset, HdspOpts( hdspMode, hdspHist ) );
+}
+
+uint32_t Encoder::encodeLayer2( py::array_t<int32_t, py::array::c_style> qindex, py::array_t<int32_t, py::array::c_style> baseWeights, uint8_t dq_flag, int32_t scan_order, uint8_t general_profile_idc, uint8_t parent_node_id_present_flag, uint8_t rowSkipFlag, py::array_t<int32_t, py::array::c_style> ChanZeroList,HdspMode hdspMode, HdspPyAryType hdspHist, uint32_t codebook_size, uint32_t codebook_zero_offset  )
+{
+  py::buffer_info bi_qindex = qindex.request();
+  int32_t* pQindex          = (int32_t*) bi_qindex.ptr;
+
+  py::buffer_info bi_ChanZeroList = ChanZeroList.request();
+  int32_t* pChanZeroList = (int32_t*) bi_ChanZeroList.ptr;
+
+  py::buffer_info bi_baseWeights = baseWeights.request();
+  int32_t* pBaseWeights          = (int32_t*) bi_baseWeights.ptr;
+
+  uint32_t layerWidth = 1;
+  uint32_t numWeights = 1;
+  for( size_t idx = 0; idx < (size_t)bi_qindex.ndim; idx++ )
+  {
+    numWeights *= bi_qindex.shape[idx];
+    if( idx == 0 ) { continue; }
+    layerWidth *= bi_qindex.shape[idx];
+  }
+  if( layerWidth == 1 || numWeights == layerWidth )
+      scan_order = 0;
+
+  return m_CABACEncoder.encodeWeights2(pQindex, pBaseWeights, layerWidth, numWeights, dq_flag, scan_order, general_profile_idc, parent_node_id_present_flag, rowSkipFlag, pChanZeroList, codebook_size, codebook_zero_offset, HdspOpts( hdspMode, hdspHist ) );
 }
 
 py::array_t<uint8_t> Encoder::finish()
@@ -161,13 +190,15 @@ public:
   ~Decoder() {}
 
   void     setStream    ( py::array_t<uint8_t, py::array::c_style> Bytestream );
-  void     initCtxModels( uint32_t cabac_unary_length_minus1 ) { m_CABACDecoder.initCtxMdls( cabac_unary_length_minus1+1 ); }
+  void     initCtxModels( uint32_t cabac_unary_length ) { m_CABACDecoder.initCtxMdls( cabac_unary_length ); }
   int32_t  iae_v        (uint8_t v) { return m_CABACDecoder.iae_v(v); }
   uint32_t uae_v        ( uint8_t v )                   { return m_CABACDecoder.uae_v( v ); }
 
-  py::array_t<uint64_t> decodeLayerAndCreateEPs(py::array_t<int32_t, py::array::c_style> Weights, uint8_t dq_flag, int32_t scan_order); //Return value -> Array? Ptr?
+  py::array_t<uint64_t> decodeLayerAndCreateEPs(py::array_t<int32_t, py::array::c_style> Weights, uint8_t dq_flag, int32_t scan_order, uint8_t general_profile_idc, uint8_t parent_node_id_present_flag, HdspMode hdspMode, HdspPyAryType hdspHist, uint32_t codebook_size=0, uint32_t codebook_zero_offset=0 ); //Return value -> Array? Ptr?
+  py::array_t<uint64_t> decodeLayerAndCreateEPs2(py::array_t<int32_t, py::array::c_style> Weights, py::array_t<int32_t, py::array::c_style> WeightsBase, uint8_t dq_flag, int32_t scan_order, uint8_t general_profile_idc, uint8_t parent_node_id_present_flag, HdspMode hdspMode, HdspPyAryType hdspHist, uint32_t codebook_size=0, uint32_t codebook_zero_offset=0 ); //Return value -> Array? Ptr?
   void     setEntryPoints( py::array_t<uint64_t, py::array::c_style> entryPoints);
-  void     decodeLayer  ( py::array_t<int32_t, py::array::c_style> Weights, uint8_t dq_flag, int32_t scan_order );
+  void     decodeLayer  ( py::array_t<int32_t, py::array::c_style> Weights, uint8_t dq_flag, int32_t scan_order, uint8_t general_profile_idc, uint8_t parent_node_id_present_flag, HdspMode hdspMode, HdspPyAryType hdspHist, uint32_t codebook_size=0, uint32_t codebook_zero_offset=0  );
+  void     decodeLayer2  ( py::array_t<int32_t, py::array::c_style> Weights, py::array_t<int32_t, py::array::c_style> WeightsBase, uint8_t dq_flag, int32_t scan_order, uint8_t general_profile_idc, uint8_t parent_node_id_present_flag, HdspMode hdspMode, HdspPyAryType hdspHist, uint32_t codebook_size=0, uint32_t codebook_zero_offset=0  );
   void     dequantLayer ( py::array_t<float32_t, py::array::c_style> Weights, py::array_t<int32_t, py::array::c_style> qIndex, int32_t qpDensity, int32_t qp, int32_t scan_order);
   uint32_t finish       ();
 
@@ -182,7 +213,7 @@ void Decoder::setStream( py::array_t<uint8_t, py::array::c_style> Bytestream )
   m_CABACDecoder.startCabacDecoding( pBytestream );
 }
 
-py::array_t<uint64_t> Decoder::decodeLayerAndCreateEPs(py::array_t<int32_t, py::array::c_style> Weights, uint8_t dq_flag, int32_t scan_order)
+py::array_t<uint64_t> Decoder::decodeLayerAndCreateEPs(py::array_t<int32_t, py::array::c_style> Weights, uint8_t dq_flag, int32_t scan_order,uint8_t general_profile_idc, uint8_t parent_node_id_present_flag, HdspMode hdspMode, HdspPyAryType hdspHist, uint32_t codebook_size, uint32_t codebook_zero_offset )
 {
   std::vector<uint64_t> entryPoints; 
   py::buffer_info bi_Weights = Weights.request();
@@ -202,7 +233,43 @@ py::array_t<uint64_t> Decoder::decodeLayerAndCreateEPs(py::array_t<int32_t, py::
   if (layerWidth == 1 || numWeights == layerWidth)
     scan_order = 0;
 
-  m_CABACDecoder.decodeWeightsAndCreateEPs(pWeights, layerWidth, numWeights, dq_flag, scan_order, entryPoints);
+  m_CABACDecoder.decodeWeightsAndCreateEPs(pWeights, layerWidth, numWeights, dq_flag, scan_order, general_profile_idc, parent_node_id_present_flag, entryPoints, codebook_size, codebook_zero_offset, HdspOpts( hdspMode, hdspHist ) );
+
+  auto Result = py::array_t<uint64_t, py::array::c_style>(entryPoints.size());
+  py::buffer_info bi_Result = Result.request();
+  uint64_t *pResult = (uint64_t *)bi_Result.ptr;
+
+  for (size_t idx = 0; idx < entryPoints.size(); idx++)
+  {
+    pResult[idx] = entryPoints.at(idx);
+  }
+
+  return Result;
+}
+
+py::array_t<uint64_t> Decoder::decodeLayerAndCreateEPs2(py::array_t<int32_t, py::array::c_style> Weights, py::array_t<int32_t, py::array::c_style> WeightsBase, uint8_t dq_flag, int32_t scan_order, uint8_t general_profile_idc, uint8_t parent_node_id_present_flag, HdspMode hdspMode, HdspPyAryType hdspHist, uint32_t codebook_size, uint32_t codebook_zero_offset)
+{
+  std::vector<uint64_t> entryPoints; 
+  py::buffer_info bi_Weights = Weights.request();
+  py::buffer_info bi_WeightsBase = WeightsBase.request();
+
+  int32_t *pWeights = (int32_t *)bi_Weights.ptr;
+  int32_t *pWeightsBase = (int32_t *)bi_WeightsBase.ptr;
+  uint32_t layerWidth = 1;
+  uint32_t numWeights = 1;
+  for (size_t idx = 0; idx < (size_t)bi_Weights.ndim; idx++)
+  {
+    numWeights *= bi_Weights.shape[idx];
+    if (idx == 0)
+    {
+      continue;
+    }
+    layerWidth *= bi_Weights.shape[idx];
+  }
+  if (layerWidth == 1 || numWeights == layerWidth)
+    scan_order = 0;
+
+  m_CABACDecoder.decodeWeightsAndCreateEPs2(pWeights, pWeightsBase, layerWidth, numWeights, dq_flag, scan_order, general_profile_idc, parent_node_id_present_flag, entryPoints, codebook_size, codebook_zero_offset, HdspOpts( hdspMode, hdspHist ) );
 
   auto Result = py::array_t<uint64_t, py::array::c_style>(entryPoints.size());
   py::buffer_info bi_Result = Result.request();
@@ -231,7 +298,7 @@ void Decoder::setEntryPoints(py::array_t<uint64_t, py::array::c_style> entryPoin
   m_CABACDecoder.setEntryPoints(pEntryPoints, numEntryPoints);
 }
 
-void Decoder::decodeLayer( py::array_t<int32_t, py::array::c_style> Weights , uint8_t dq_flag, int32_t scan_order )    
+void Decoder::decodeLayer( py::array_t<int32_t, py::array::c_style> Weights , uint8_t dq_flag, int32_t scan_order, uint8_t general_profile_idc, uint8_t parent_node_id_present_flag, HdspMode hdspMode, HdspPyAryType hdspHist, uint32_t codebook_size, uint32_t codebook_zero_offset  )    
 {
   py::buffer_info bi_Weights = Weights.request();
 
@@ -246,7 +313,29 @@ void Decoder::decodeLayer( py::array_t<int32_t, py::array::c_style> Weights , ui
   }
   if( layerWidth == 1 || numWeights == layerWidth )
       scan_order = 0;
-  m_CABACDecoder.decodeWeights(pWeights, layerWidth, numWeights, dq_flag, scan_order);
+
+  m_CABACDecoder.decodeWeights(pWeights, layerWidth, numWeights, dq_flag, scan_order, general_profile_idc, parent_node_id_present_flag, codebook_size, codebook_zero_offset, HdspOpts( hdspMode, hdspHist ) );
+}
+
+void Decoder::decodeLayer2( py::array_t<int32_t, py::array::c_style> Weights , py::array_t<int32_t, py::array::c_style> WeightsBase , uint8_t dq_flag, int32_t scan_order, uint8_t general_profile_idc, uint8_t parent_node_id_present_flag, HdspMode hdspMode, HdspPyAryType hdspHist, uint32_t codebook_size, uint32_t codebook_zero_offset  )
+{
+  py::buffer_info bi_Weights = Weights.request();
+  py::buffer_info bi_WeightsBase = WeightsBase.request();
+
+  int32_t* pWeights   = (int32_t*) bi_Weights.ptr;
+  int32_t* pWeightsBase   = (int32_t*) bi_WeightsBase.ptr;
+  uint32_t layerWidth = 1;
+  uint32_t numWeights = 1;
+  for (size_t idx = 0; idx < (size_t)bi_Weights.ndim; idx++)
+  {
+    numWeights *= bi_Weights.shape[idx];
+    if( idx == 0 ) { continue; }
+    layerWidth *= bi_Weights.shape[idx];
+  }
+  if( layerWidth == 1 || numWeights == layerWidth )
+      scan_order = 0;
+
+  m_CABACDecoder.decodeWeights2(pWeights, pWeightsBase, layerWidth, numWeights, dq_flag, scan_order, general_profile_idc, parent_node_id_present_flag, codebook_size, codebook_zero_offset, HdspOpts( hdspMode, hdspHist ) );
 }
 
 
@@ -295,6 +384,7 @@ PYBIND11_MODULE(deepCABAC, m)
         .def( "initCtxModels", &Encoder::initCtxModels )
         .def( "quantLayer",    &Encoder::quantLayer    )
         .def( "encodeLayer",   &Encoder::encodeLayer   )
+        .def( "encodeLayer2",   &Encoder::encodeLayer2   )
         .def( "finish",        &Encoder::finish        );
 
     py::class_<Decoder>(m, "Decoder")
@@ -305,7 +395,13 @@ PYBIND11_MODULE(deepCABAC, m)
         .def( "uae_v",         &Decoder::uae_v         )
         .def( "decodeLayer",   &Decoder::decodeLayer   )
         .def( "decodeLayerAndCreateEPs",   &Decoder::decodeLayerAndCreateEPs   )
+        .def( "decodeLayer2",   &Decoder::decodeLayer2   )
+        .def( "decodeLayerAndCreateEPs2",   &Decoder::decodeLayerAndCreateEPs2   )
         .def( "setEntryPoints",&Decoder::setEntryPoints)
         .def( "dequantLayer",  &Decoder::dequantLayer  )
         .def( "finish",        &Decoder::finish        );
+  py::enum_<HdspMode>( m, "HdspMode" )
+    .value("TensorOff"      , HdspMode::TensorOff        )
+    .value("TensorOn"       , HdspMode::TensorOn         )
+    .value("AlwaysOff"      , HdspMode::AlwaysOff        );
 }

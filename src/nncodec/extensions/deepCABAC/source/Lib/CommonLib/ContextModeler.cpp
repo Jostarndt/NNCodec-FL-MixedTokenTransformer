@@ -1,12 +1,12 @@
 /* -----------------------------------------------------------------------------
 The copyright in this software is being made available under the Clear BSD
-License, included below. No patent rights, trademark rights and/or 
-other Intellectual Property Rights other than the copyrights concerning 
+License, included below. No patent rights, trademark rights and/or
+other Intellectual Property Rights other than the copyrights concerning
 the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
+Copyright (c) 2019-2025, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -42,54 +42,101 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "ContextModeler.h"
 
 
-void ContextModeler::init()
+void ContextModeler::init(uint32_t cabac_unary_length)
 {
     neighborWeightVal = 0;
+    baseModelWeightVal = 0;
+    useBaseMdl = false;
+    m_cabac_unary_length = cabac_unary_length;
+    hdspEnabledAtPos = false;
 }
 
 void ContextModeler::resetNeighborCtx()
 {
-    init();
+    neighborWeightVal = 0;
+    baseModelWeightVal = 0;
+    useBaseMdl = false;
+    hdspEnabledAtPos = false;
 }
-
 
 int32_t ContextModeler::getSigCtxId( int32_t stateId )
 {
-  int32_t offset = 3 * stateId;
+    int32_t offset = 3 * stateId;
     int32_t ctxId = 0;
 
-    if (neighborWeightVal != 0)
+    if ( hdspEnabledAtPos )
+    {
+      offset = 40;
+      ctxId = stateId;//(int32_t) ctxIds::sigfHdsp;
+    }
+    else
+    {
+    if(std::abs( baseModelWeightVal ) > 0 )
+    {
+        offset = 24 + 2*stateId;
+        ctxId = std::abs(baseModelWeightVal) > 1 ? 1 : 0;
+    }
+    else if (neighborWeightVal != 0)
     {
         ctxId = neighborWeightVal < 0 ? 1 : 2;
     }
+    }
+  
 
     return ctxId+offset;
 }
 
 int32_t ContextModeler::getSignFlagCtxId()
 {
-    int32_t ctxId = 8*3;
+    int32_t ctxId = 8*6;
+    int32_t offset = 0;
 
-    if (neighborWeightVal != 0)
+
+    if(std::abs( baseModelWeightVal ) > 0 )
+    {
+        offset += 3;
+        ctxId +=  baseModelWeightVal < 0 ? 0 : 1; 
+    }
+    else if (neighborWeightVal != 0)
     {
         ctxId += neighborWeightVal < 0 ? 1 : 2;
     }
 
-    return ctxId;
+    return ctxId + offset ;
 }
 
 int32_t ContextModeler::getGtxCtxId( int32_t currWeighVal, uint32_t numGtxFlagsCoded, int32_t stateId )
 {
-    int32_t offset =  8*3+3;
+    int32_t offset =  8*6+5;
     int32_t ctxId  = 0;
-
-    ctxId = currWeighVal > 0 ? (numGtxFlagsCoded << 1) : 1 + (numGtxFlagsCoded << 1);
+    
+    if(std::abs( baseModelWeightVal ) > 0 )
+    {  
+        offset += 2*m_cabac_unary_length;
+        ctxId = std::abs(baseModelWeightVal) >= numGtxFlagsCoded ? (numGtxFlagsCoded << 1) : 1 + (numGtxFlagsCoded << 1);
+    }
+    else
+    {
+        ctxId = currWeighVal > 0 ? (numGtxFlagsCoded << 1) : 1 + (numGtxFlagsCoded << 1);
+    }
 
     return (ctxId + offset);
 }
 
 
-void ContextModeler::updateNeighborCtx( int32_t currWeightVal )
+void ContextModeler::updateNeighborCtx( int32_t currWeightVal, uint32_t posInMat, uint32_t layerWidth ) //TODO REMOVE posInMat and layerWidth
 {
-    neighborWeightVal = currWeightVal;
+  neighborWeightVal = currWeightVal;
+}
+
+void ContextModeler::updateHdspEnabled( bool hdspEnabledAtPosIn )
+{
+  hdspEnabledAtPos = hdspEnabledAtPosIn;
+}
+
+
+void ContextModeler::updateBaseMdlCtx( int32_t baseModelWeight )
+{
+    baseModelWeightVal = baseModelWeight;
+    useBaseMdl = true;
 }

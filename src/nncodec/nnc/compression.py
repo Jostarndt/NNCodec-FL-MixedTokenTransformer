@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
+Copyright (c) 2019-2025, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -39,7 +39,6 @@ POSSIBILITY OF SUCH DAMAGE.
 '''
     
 import sys
-
 assert sys.version_info >= (3, 6)
 
 import os
@@ -47,14 +46,10 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import numpy as np
 import copy
 from timeit import default_timer as timer
+from nncodec import nnc_core
+from nncodec.nnc_core import nnr_model
+from nncodec.framework import tensorflow_model, pytorch_model, use_case_init
 
-from src.nncodec import nnc_core
-from src.nncodec.nnc_core import nnr_model
-
-from src.nncodec.framework import pytorch_model, tensorflow_model
-
-
-#import torch
 
 def __print_output_line( outputString, verbose=True ):
     if verbose:
@@ -84,7 +79,7 @@ def guess_block_id_and_param_type(model_struct, add_lsa_params=False):
                 block_id_and_param_type["block_identifier"][lsa_param] = block_id_and_param_type["block_identifier"][param]
     
     if block_id_and_param_type:    
-        blkIdParamTypeOk = nnc_core.nnr_model.sanity_check_block_id_and_param_type(block_id_and_param_type, model_parameters)
+        blkIdParamTypeOk = nnc_core.nnr_model.sanity_check_block_id_and_param_type( block_id_and_param_type, model_parameters )
         if blkIdParamTypeOk == False:
             print("INFO: Sanity check for block_id_and_param_type failed! block_id_and_param_type has been set to 'None'!")
             block_id_and_param_type = None
@@ -114,14 +109,16 @@ def compress_model( model_path_or_object,
                     model_executer=None,
                     model_struct=None,
                     dataset_path=None,
+                    use_case=None,
                     learning_rate=1e-4,
                     batch_size=64,
                     epochs=30,
-                    max_batches=600,
+                    max_batches=None,
                     num_workers=8,
                     return_model_data=False,
                     verbose=True,
                     return_bitstream=False,
+                    wandb_logging=False
                    ):
 
     is_pyt_model = False
@@ -140,6 +137,9 @@ def compress_model( model_path_or_object,
                  model_path_or_object,
                 )
         else:
+            if use_case != None:
+                assert use_case in use_case_init.use_cases.keys(), \
+                    f"use case must be one of {list(use_case_init.use_cases.keys())}"
             nnc_mdl, nnc_mdl_executer, model_parameters = tensorflow_model.create_NNC_model_instance_from_object(
                 model_path_or_object,
                 dataset_path=dataset_path,
@@ -147,7 +147,8 @@ def compress_model( model_path_or_object,
                 batch_size=batch_size,
                 num_workers=num_workers,
                 model_struct=model_struct,
-                model_name=model_name
+                model_name=model_name,
+                use_case=use_case
                 )
     elif pytorch_model.is_pyt_model(model_path_or_object):
         is_pyt_model = True
@@ -155,7 +156,10 @@ def compress_model( model_path_or_object,
                 nnc_mdl, _, model_parameters = pytorch_model.create_NNC_model_instance_from_object(
                  model_path_or_object,
                 )
-        else:    
+        else:
+            if use_case != None:
+                assert use_case in use_case_init.use_cases.keys(), \
+                    f"use case must be one of {list(use_case_init.use_cases.keys())}"
             nnc_mdl, nnc_mdl_executer, model_parameters = pytorch_model.create_NNC_model_instance_from_object(
                 model_path_or_object,
                 dataset_path=dataset_path,
@@ -166,6 +170,7 @@ def compress_model( model_path_or_object,
                 lsa=lsa,
                 epochs=epochs,
                 max_batches=max_batches,
+                use_case=use_case
                 )
     elif os.path.exists( os.path.expanduser(model_path_or_object)):
         model_path_or_object = os.path.expanduser(model_path_or_object)
@@ -211,7 +216,7 @@ def compress_model( model_path_or_object,
                     )
 
         else:
-            nnc_mdl, model_parameters = nnr_model.create_NNC_model_instance_from_file(model_path_or_object)
+            nnc_mdl, model_parameters = nnr_model.create_NNC_model_instance_from_file( model_path_or_object )
             nnc_mdl_executer = None
 
     else:
@@ -221,8 +226,12 @@ def compress_model( model_path_or_object,
         nnc_mdl_executer = model_executer    
     
     if block_id_and_param_type is None and (bnf or lsa) and (is_pyt_model or is_tef_model):
-        block_id_and_param_type = nnc_mdl.guess_block_id_and_param_type(model_parameters)
-        blkIdParamTypeOk = nnc_core.nnr_model.sanity_check_block_id_and_param_type(block_id_and_param_type, model_parameters)
+        if is_pyt_model: #ADDED for ICML
+            bn_info = nnc_mdl.get_torch_bn_info(model_path_or_object)
+            block_id_and_param_type = nnc_mdl.guess_block_id_and_param_type(model_parameters, bn_info=bn_info)
+        else:
+            block_id_and_param_type = nnc_mdl.guess_block_id_and_param_type(model_parameters)
+        blkIdParamTypeOk = nnc_core.nnr_model.sanity_check_block_id_and_param_type( block_id_and_param_type, model_parameters )
         if blkIdParamTypeOk == False:
             print("INFO: Sanity check for block_id_and_param_type failed! block_id_and_param_type has been set to 'None', and the flags 'lsa' and 'bnf' have been set to 'False'!")
             block_id_and_param_type = None
@@ -258,9 +267,13 @@ def compress_model( model_path_or_object,
                             model_executer=nnc_mdl_executer,
                             verbose=verbose,
                             return_bitstream=return_bitstream,
+                            wandb_logging=wandb_logging
                             )
 
-    if return_model_data==True:
+    if bnf: #ADDED for ICML
+        block_id_and_param_type["bnf_matching"], bitstream = bitstream[1], bitstream[0]
+
+    if return_model_data==True or (bnf and is_pyt_model):
         if return_bitstream:
             return bitstream, block_id_and_param_type
         else:
@@ -287,11 +300,20 @@ def compress(
     bnf=False,
     lsa=False,
     fine_tune=False,
+    row_skipping=False,
+    tca=False,
     block_id_and_param_type=None,
     model=None,
     model_executer=None,
-    verbose=True,
+    verbose=False,
     return_bitstream=False,
+    bnf_mapping=False,
+    wandb_logging=False,
+    approx_param_base=None,
+    device_id=0,
+    compress_differences=False,
+    int_quant_bw=False,
+    quantize_only=False
     ):
 
     try:
@@ -307,16 +329,16 @@ def compress(
                 nnc_mdl = nnc_core.nnr_model.NNRModel(parameter_dict)
 
             if model_executer is not None:
-                assert isinstance(model_executer, nnc_core.nnr_model.ModelExecute), "model_executer must be of type ModelExecute!"
+                assert isinstance( model_executer, nnc_core.nnr_model.ModelExecute ), "model_executer must be of type ModelExecute!"
         else:
             raise SystemExit("Parameter dict must be a dict (key-value pairs). The keys shall be stings, specifying the tensor names. The values shalls be numpy arrays (ndarray) of type float32 or int32!")
     except:
         raise SystemExit("Can not read parameter_dict: {}".format(parameter_dict))
 
     if block_id_and_param_type is not None:
-        blkIdParamTypeOk = nnc_core.nnr_model.sanity_check_block_id_and_param_type(block_id_and_param_type, parameter_dict)
+        blkIdParamTypeOk = nnc_core.nnr_model.sanity_check_block_id_and_param_type( block_id_and_param_type, parameter_dict )
         if blkIdParamTypeOk:
-            nnc_core.nnr_model.set_block_id_and_param_type(nnc_mdl.model_info, block_id_and_param_type)
+            nnc_core.nnr_model.set_block_id_and_param_type( nnc_mdl.model_info , block_id_and_param_type )
         else:
             print("INFO: Sanity check for block_id_and_param_type failed! block_id_and_param_type has been set to 'None', and the flags 'lsa' and 'bnf' have been set to 'False'!")
             block_id_and_param_type = None
@@ -336,35 +358,63 @@ def compress(
             ioq = False
                     
     ##INITIALIZATION
-    approx_data =  nnc_core.approximator.init_approx_data(model_parameters,
-                                                          nnc_mdl.model_info,
-                                                          qp_density=qp_density,
-                                                          scan_order=scan_order
-                                                          )
+    approx_data =  nnc_core.approximator.init_approx_data(  model_parameters,
+                                                            nnc_mdl.model_info, 
+                                                            qp_density=qp_density, 
+                                                            scan_order=scan_order
+                                                         )
 
-    ApproxInfoO = nnc_core.approximator.ApproxInfo(approx_data,
-                                                   nnc_mdl.model_info,
+    ApproxInfoO = nnc_core.approximator.ApproxInfo( approx_data,
+                                                    nnc_mdl.model_info,
                                                     "uniform" if codebook_mode==0 else "codebook",
-                                                   codebook_mode,
-                                                   qp,
-                                                   opt_qp,
-                                                   not use_dq,
-                                                   cabac_unary_length_minus1,
-                                                   lambda_scale,
-                                                   nonweight_qp=nonweight_qp,
-                                                   qp_per_tensor=qp_per_tensor
-                                                   )
+                                                    codebook_mode,
+                                                    qp,
+                                                    opt_qp,
+                                                    not use_dq,
+                                                    cabac_unary_length_minus1,
+                                                    lambda_scale,
+                                                    nonweight_qp=nonweight_qp,
+                                                    qp_per_tensor=qp_per_tensor,
+                                                    int_quant_bw=int_quant_bw
+                                                )
     approx_info = ApproxInfoO.approx_info
 
     enc_info = {
             "cabac_unary_length_minus1" : cabac_unary_length_minus1,
             "param_opt_flag"     : param_opt,
+            "partial_data_counter": 0,  # TODO parameterize
+            "general_profile_idc": 1,  # TODO parameterize
         }
+
+    if enc_info.get("general_profile_idc", 0):
+        """
+        If mps_parent_signalling_enabled_flag is equal to 0, parent_node_id_present_flag is not present for any NDU 
+        (i.e. the bitstream represents a base neural network). If mps_parent_signalling_enabled_flag is equal to 1, 
+        the bitstream represents a differential update of a base neural network.
+        
+        parent_node_id_present_flag indicates whether the NDU represents a differential update of a base neural network. 
+        It shall be set to 1 for NDUs representing differential updates, and to 0 otherwise. A value
+        """
+        enc_info["mps_parent_signalling_enabled_flag"] = 1 if compress_differences or tca else 0
+        enc_info["parent_node_id_present_flag"] = 1 if compress_differences or tca else 0
+        enc_info["node_id_present_flag"] = 1
+        enc_info["parent_node_id_type"] = nnc_core.hls.ParentNodeIdType.ICNN_NDU_ID
+        enc_info["parent_device_id"] = 0
+        enc_info["node_id_present_flag"] = 1
+        enc_info["device_id"] = device_id
+        enc_info["temporal_context_modeling_flag"] = 1 if tca else 0
+        enc_info["row_skip_enabled_flag"] = 1 if row_skipping else 0
+        # enc_info["nnr_pt_block_enabled_flag"] = nnr_pt_block_enabled_flag
+    else:
+        enc_info["mps_parent_signalling_enabled_flag"] = 0
+        enc_info["parent_node_id_present_flag"] = 0
+        enc_info["node_id_present_flag"] = 0
+
     end = timer()
     __print_output_line("DONE in {:.4f} s\n".format(end-start), verbose=verbose)
 
     ##PREPROCESSING
-    if ioq:
+    if ioq and not bnf_mapping:
         assert model_executer is not None, "model_executer must be available in order to run IOQ!"
         start = timer()
         __print_output_line("PREPROCESSING, IOQ...\n", verbose=verbose) 
@@ -381,7 +431,7 @@ def compress(
         __print_output_line("DONE in {:.4f} s\n".format( end-start ), verbose=verbose)   
 
     ##LSA and FT
-    if lsa or fine_tune:
+    if (lsa or fine_tune) and not bnf_mapping:
         assert model_executer is not None, "model_executer must be available in order to run LSA and/or FT!"
         start = timer()
         __print_output_line("PREPROCESSING, LSA/FT...\n", verbose=verbose) 
@@ -394,41 +444,49 @@ def compress(
             lsa,
             fine_tune,
             use_dq,
-            verbose
+            verbose,
+            wandb_logging
         )
         end = timer()
         __print_output_line("DONE in {:.4f} s\n".format( end-start ), verbose=verbose)  
     ##BNF
-    if bnf:
+    if bnf or bnf_mapping:
         start = timer()
         __print_output_line("PREPROCESSING, BNF...", verbose=verbose)    
-        nnc_core.approximator.fold_bn(nnc_mdl.model_info, approx_data, ApproxInfoO)
+        nnc_core.approximator.fold_bn(nnc_mdl.model_info, approx_data, ApproxInfoO, bnf_mapping=bnf_mapping)
         end = timer()
         __print_output_line("DONE in {:.4f} s\n".format(end-start), verbose=verbose)
+        if bnf_mapping:
+            return nnc_mdl.model_info
 
     #####QUANTIZATION AND ENCODING
     start = timer() 
     __print_output_line("APPROXIMATING WITH METHOD {}...".format(approx_info["approx_method"]), verbose=verbose)
-    approx_data_enc = nnc_core.approximator.approx(approx_info,
-                                                   nnc_mdl.model_info,
-                                                   approx_data,
-                                                   enc_info["param_opt_flag"]
-                                                   )
+    approx_data_enc = nnc_core.approximator.approx( approx_info,
+                                                nnc_mdl.model_info,
+                                                approx_data,
+                                                enc_info
+                                               )
     end = timer()
     __print_output_line("DONE in {:.4f} s\n".format( end-start ), verbose=verbose)
 
+    if quantize_only:
+        nnc_core.approximator.rec(approx_data_enc)
+        return approx_data_enc["parameters"]
+
     start = timer()
     __print_output_line("ENCODING...", verbose=verbose)
-    bitstream = nnc_core.coder.encode(enc_info,
-                                      nnc_mdl.model_info,
-                                      approx_data_enc
-                                      )
+    bitstream, _ = nnc_core.coder.encode(enc_info=enc_info,
+                                         model_info=nnc_mdl.model_info,
+                                         approx_data=approx_data_enc,
+                                         approx_param_base=approx_param_base
+                                         )
     end = timer()
     __print_output_line("DONE in {:.4f} s\n".format( end-start ), verbose=verbose)
 
     original_size = nnc_mdl.model_info["original_size"]
 
-    __print_output_line("COMPRESSED FROM {} BYTES TO {} BYTES ({} KB, {} MB, COMPRESSION RATIO: {:.2f} %) in {:.4f} s\n".format(original_size, len(bitstream), len(bitstream)/1000.0, len(bitstream)/1000000.0, len(bitstream)/original_size*100, end-start_overall), verbose=verbose)
+    __print_output_line("COMPRESSED FROM {} BYTES TO {} BYTES ({:.2f} KB, {:.2f} MB, COMPRESSION RATIO: {:.2f} %) in {:.4f} s\n".format(original_size, len(bitstream), len(bitstream)/1000.0, len(bitstream)/1000000.0, len(bitstream)/original_size*100, end-start_overall), verbose=True)
     
     if bitstream_path is not None:
         with open( bitstream_path, "wb" ) as br_file:
@@ -441,9 +499,12 @@ def compress(
 def decompress( bitstream_or_path, 
                 block_id_and_param_type=None, 
                 return_model_information=False, 
-                verbose=True, 
-                reconstruct_lsa=True, 
-                reconstruct_bnf=True
+                verbose=False,
+                reconstruct_lsa=False,
+                reconstruct_bnf=False,
+                approx_param_base=None,
+                update_base_param=False,
+                internal_states_path=None,
                 ):
 
     dec_model_info  = {'parameter_type': {},
@@ -466,14 +527,15 @@ def decompress( bitstream_or_path,
                         }
 
     if block_id_and_param_type is not None:
-        blkIdParamTypeOk = nnc_core.nnr_model.sanity_check_block_id_and_param_type(block_id_and_param_type)
+        blkIdParamTypeOk = nnc_core.nnr_model.sanity_check_block_id_and_param_type( block_id_and_param_type )
         if blkIdParamTypeOk == False:
             print("INFO: Sanity check for block_id_and_param_type failed! block_id_and_param_type has been set to 'None'!")
             block_id_and_param_type = None
         else:
-            nnc_core.nnr_model.set_block_id_and_param_type(dec_model_info, block_id_and_param_type)
+            nnc_core.nnr_model.set_block_id_and_param_type( dec_model_info, block_id_and_param_type )
 
     hls_bytes = {}
+    oob_dict = {}
     start = timer()
     __print_output_line("DECODING...", verbose=verbose)
     if isinstance(bitstream_or_path, bytearray):
@@ -484,19 +546,31 @@ def decompress( bitstream_or_path,
     else:
         raise SystemExit( "Could not read bitstream or bitstream_path: {}".format(bitstream_or_path) )
 
-    dec_approx_data = nnc_core.coder.decode(bitstream, dec_model_info, hls_bytes)
+    if internal_states_path and approx_param_base is None: # loading co-located params for temporal tool
+        ndu_header = nnc_core.coder.decode_ndu_unit_header(copy.deepcopy(bitstream), dec_model_info, hls_stats=hls_bytes)
+        _int_states_path = internal_states_path + f"/client_ID{ndu_header['device_id']}_internal_states.npz"
+        loaded_states = np.load(_int_states_path, allow_pickle=True)  # TODO get rid of allow_pickle
+        loaded_internal_states = {k: loaded_states[k].item() for k in loaded_states.files}
+        approx_param_base = loaded_internal_states['approx_param_base']
+
+    dec_approx_data = nnc_core.coder.decode(bitstream, dec_model_info, hls_stats=hls_bytes, oob_dict=oob_dict,
+                                            approx_param_base=approx_param_base, update_base_param=update_base_param)
+
+    if internal_states_path and approx_param_base["parameters"]:
+        np.savez(f"{_int_states_path}", **loaded_internal_states)
+
     end = timer()
     __print_output_line("DONE in {:.4f} s\n".format( end-start ), verbose=verbose)
 
     start = timer()
     rec_approx_data = dec_approx_data
     __print_output_line("RECONSTRUCTING...", verbose=verbose)
-    nnc_core.approximator.rec(rec_approx_data)
-    if reconstruct_bnf:
+    nnc_core.approximator.rec(rec_approx_data )
+    if reconstruct_bnf: ## TODO: check if there are cases where must be dis/enabled
         nnc_core.approximator.unfold_bn(dec_model_info, rec_approx_data)
-    if reconstruct_lsa:
+    if reconstruct_lsa: ## TODO: check if there are cases where must be dis/enabled
         nnc_core.approximator.apply_lsa(dec_model_info, rec_approx_data)
-    rec_approx_data = nnc_core.approximator.recompose_params(dec_model_info, rec_approx_data)
+    rec_approx_data = nnc_core.approximator.recompose_params( dec_model_info, rec_approx_data)
     end = timer()
     __print_output_line("DONE in {:.4f} s\n".format( end-start ), verbose=verbose)
     
@@ -528,7 +602,7 @@ def decompress_model( bitstream_or_path,
                     ):
     
     if block_id_and_param_type is not None:
-        blkIdParamTypeOk = nnc_core.nnr_model.sanity_check_block_id_and_param_type(block_id_and_param_type)
+        blkIdParamTypeOk = nnc_core.nnr_model.sanity_check_block_id_and_param_type( block_id_and_param_type )
         if blkIdParamTypeOk == False:
             print("INFO: Sanity check for block_id_and_param_type failed! block_id_and_param_type has been set to 'None'!")
             block_id_and_param_type = None
@@ -546,7 +620,7 @@ def decompress_model( bitstream_or_path,
         if model_path == None:
             model_path="./rec.pt"
 
-        pytorch_model.save_to_pytorch_file(model_dict, model_path)
+        pytorch_model.save_to_pytorch_file( model_dict, model_path )
 
         if ( (model_struct and dataset_path) or model_executer ) and test_model:
             
@@ -574,7 +648,7 @@ def decompress_model( bitstream_or_path,
         if model_path == None:
             model_path="./rec.h5"
 
-        tensorflow_model.save_to_tensorflow_file(model_dict, model_path)
+        tensorflow_model.save_to_tensorflow_file( model_dict, model_path )
         
         if ( (model_struct and dataset_path) or model_executer ) and test_model:
             
@@ -603,7 +677,7 @@ def decompress_model( bitstream_or_path,
         if model_path == None:
             model_path="./rec.mdl"
 
-        nnr_model.save_to_pickled_file(model_dict, model_path)
+        nnr_model.save_to_pickled_file( model_dict, model_path )
 
         if model_executer and test_model:
             nnc_mdl_executer = model_executer

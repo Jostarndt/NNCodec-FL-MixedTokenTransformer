@@ -6,7 +6,7 @@ the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
+Copyright (c) 2019-2025, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -48,8 +48,27 @@ import torch.nn as nn
 from torch.functional import F
 import cv2 as cv
 import numpy as np
+from torchvision import transforms
+from torch.utils.data import random_split, DataLoader
+from flwr.common import ndarrays_to_parameters
 
+MDL_TRAFOS = [
+    "model_transform_ImageNet_to_CIFAR100",
+    "LSA"
+]
 
+DATA_TRAFOS = [
+    "transforms_tef_model_zoo",
+    "transforms_pyt_model_zoo"
+]
+
+transforms_pyt_model_zoo = transforms.Compose([
+    transforms.Resize(256),
+    transforms.CenterCrop(224),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                         std=[0.229, 0.224, 0.225]),
+])
 def transforms_tef_model_zoo(filename, label, image_size=224):
 
     img = cv.imread(filename.numpy().decode()).astype(np.float32)
@@ -76,6 +95,19 @@ def transforms_tef_model_zoo(filename, label, image_size=224):
 
     return img, label
 
+def model_transform_ImageNet_to_CIFAR100(original_model):
+    if original_model.__class__.__name__ == 'ResNet':
+        if hasattr(original_model, "fc"):
+            classifier_in = original_model.fc.weight.shape[1]
+            original_model.fc = nn.Linear(classifier_in, 100)
+    elif 'MobileNet' in original_model.__class__.__name__ or\
+            'EfficientNet' in original_model.__class__.__name__:
+        idx = 1 if not 'V3' in original_model.__class__.__name__ else 3
+        if hasattr(original_model, "classifier"):
+            classifier_in = original_model.classifier[idx].weight.shape[1]
+            original_model.classifier[idx] = nn.Linear(classifier_in, 100)
+    return original_model
+
 class ScaledConv2d(nn.Conv2d):
     def __init__(self, in_channels, out_channels, *args, **kwargs):
         super().__init__(in_channels, out_channels, *args, **kwargs)
@@ -85,15 +117,15 @@ class ScaledConv2d(nn.Conv2d):
     def reset_parameters(self):
         # The if condition is added so that the super call in init does not reset_parameters as well.
         if hasattr(self, 'weight_scaling'):
-            nn.init.normal_(self.weight_scaling, 1, 1e-5)
+            nn.init.normal_(self.weight_scaling, 1, 0)#1e-5)
             super().reset_parameters()
 
     def forward(self, input):
         torch_version_str = str(torch.__version__).split('.')
-        if int(torch_version_str[0]) < 1 or (int(torch_version_str[0]) == 1 and int(torch_version_str[1]) <= 7):
-            return self._conv_forward(input, self.weight_scaling * self.weight)
-        else:
+        if int(torch_version_str[0]) >= 1 and int(torch_version_str[1]) > 7:
             return self._conv_forward(input, self.weight_scaling * self.weight, self.bias)
+        else:
+            return self._conv_forward(input, self.weight_scaling * self.weight)
 
 class ScaledLinear(nn.Linear):
     def __init__(self, in_features, out_features, *args, **kwargs):
@@ -104,16 +136,14 @@ class ScaledLinear(nn.Linear):
     def reset_parameters(self):
         # The if condition is added so that the super call in init does not reset_parameters as well.
             if hasattr(self, 'weight_scaling'):
-                nn.init.normal_(self.weight_scaling, 1, 1e-5)
+                nn.init.normal_(self.weight_scaling, 1, 0)#1e-5)
                 super().reset_parameters()
 
     def forward(self, input):
         return F.linear(input, self.weight_scaling * self.weight, self.bias)
 
 class LSA:
-    def __init__(self,
-                 original_model):
-
+    def __init__(self, original_model):
         self.mdl = copy.deepcopy(original_model)
 
     def update_conv2d(self, m, parent):
@@ -139,3 +169,59 @@ class LSA:
     def add_lsa_params(self):
         self.add_lsa_params_recursive(self.mdl)
         return self.mdl
+
+
+def split_datasets(testset, trainset, num_partitions: int, batch_size: int, num_workers: int, val_ratio: float = 0.1):
+
+    # def seed_worker(worker_id):
+    #     worker_seed = torch.initial_seed() % 2 ** 32
+    #     np.random.seed(worker_seed)
+    #     random.seed(worker_seed)
+    #
+    # g = torch.Generator()
+    # g.manual_seed(0)
+
+    # split trainset into `num_partitions` trainsets
+    num_images = len(trainset) // num_partitions
+
+    partition_len = [num_images] * num_partitions
+
+    trainsets = random_split(
+        trainset, partition_len, torch.Generator().manual_seed(2023)
+    )
+
+    # create dataloaders with train+val support
+    trainloaders = []
+    valloaders = []
+
+    for trainset_ in trainsets:
+        num_total = len(trainset_)
+        num_val = int(val_ratio * num_total)
+        num_train = num_total - num_val
+
+        for_train, for_val = random_split(
+            trainset_, [num_train, num_val], torch.Generator().manual_seed(909)
+        )
+
+        trainloaders.append(
+            DataLoader(for_train, batch_size=batch_size, shuffle=True, num_workers=num_workers,)
+                       # worker_init_fn=seed_worker)#, generator=g)
+        )
+        if val_ratio == 0:
+            valloaders.append(DataLoader(testset, batch_size=batch_size))
+        else:
+            valloaders.append(
+            DataLoader(for_val, batch_size=batch_size, shuffle=False, num_workers=num_workers,)
+                       # worker_init_fn=seed_worker)#, generator=g)
+            )
+
+    # create dataloader for the test set
+    testloader = DataLoader(testset, batch_size=batch_size)
+
+    return trainloaders, valloaders, testloader
+
+def torch_mdl_to_flwr_params(mdl):
+    param_dict = {k: np.float32(v.cpu().detach().numpy()) for k, v in mdl.state_dict().items()
+                  if v.shape != torch.Size([])}
+    params = [v for _, v in param_dict.items() if v.shape != ()]
+    return ndarrays_to_parameters(params)

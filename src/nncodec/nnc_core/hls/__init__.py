@@ -1,12 +1,12 @@
 '''
 The copyright in this software is being made available under the Clear BSD
-License, included below. No patent rights, trademark rights and/or 
-other Intellectual Property Rights other than the copyrights concerning 
+License, included below. No patent rights, trademark rights and/or
+other Intellectual Property Rights other than the copyrights concerning
 the Software are granted under this license.
 
 The Clear BSD License
 
-Copyright (c) 2019-2023, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
+Copyright (c) 2019-2025, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -41,7 +41,7 @@ POSSIBILITY OF SUCH DAMAGE.
 import enum
 import numpy as np
 import sys
-from src.nncodec.nnc_core import nnr_model
+from nncodec.nnc_core import nnr_model
 
 assert sys.byteorder == "little"
 
@@ -59,6 +59,14 @@ class NnrUnitType(enum.IntEnum):
 class DecompressedDataFormat(enum.IntEnum):
     TENSOR_INT32   = 0
     TENSOR_FLOAT32 = 1
+    TENSOR_INT2    = 2
+    TENSOR_INT3    = 3
+    TENSOR_INT4    = 4
+    TENSOR_INT8    = 5
+    TENSOR_INT16   = 6
+    TENSOR_INT64   = 7
+    TENSOR_FLOAT16 = 8
+    TENSOR_FLOAT64 = 9
 
     
 class CompressedDataUnitPayloadType(enum.IntEnum):
@@ -82,7 +90,13 @@ class QuantizationMethodFlags(enum.IntEnum):
 class PruningInformationRepresentationTypes(enum.IntEnum):
     NNR_TPL_BMSK = 0
     NNR_TPL_DICT = 1
-    
+
+
+class ParentNodeIdType(enum.IntEnum):
+    ICNN_NDU_ID        = 0
+    ICNN_NDU_PL_SHA256 = 1
+    ICNN_NDU_PL_SHA512 = 2
+
 class BitWriter():
     def __init__( self, bitstream ):
         self.__byteList = bitstream
@@ -424,6 +438,29 @@ class Coder():
             else:
                 self.process( "topology_elem_id_index", "ue", 7 ) 
 
+        if self.get( "general_profile_idc" ) == 1:
+            self.process( "node_id_present_flag", "u", 1 )
+            if self.get("node_id_present_flag") ==  1:
+                self.process( "device_id", "ue", 1 )
+                self.process( "parameter_id", "ue", 5 )
+                self.process( "put_node_depth", "ue", 4 )
+
+            if self.get( "mps_parent_signalling_enabled_flag" ) == 1:
+                self.process( "parent_node_id_present_flag", "u", 1 )
+                if self.get("parent_node_id_present_flag") ==  1:
+                    self.process( "parent_node_id_type", "u", 2 )
+                    self.process( "temporal_context_modeling_flag", "u", 1 )
+                    if self.get("parent_node_id_type") == ParentNodeIdType.ICNN_NDU_ID:
+                        self.process( "parent_device_id", "ue", 1 )
+                        if not self.get("node_id_present_flag") ==  1:
+                            self.process( "parameter_id", "ue", 5 )
+                            self.process( "put_node_depth", "ue", 4 )
+                    elif self.get("parent_node_id_type") == ParentNodeIdType.ICNN_NDU_PL_SHA256:
+                        self.process( "parent_node_payload_sha256", "u", 256 )
+                    elif self.get("parent_node_id_type") == ParentNodeIdType.ICNN_NDU_PL_SHA512:
+                        self.process( "parent_node_payload_sha512", "u", 512 )
+                    else:
+                        assert 0, "Unknown parent_node_id_type."
         if (
             (self.get( "nnr_compressed_data_unit_payload_type" ) == CompressedDataUnitPayloadType.NNR_PT_FLOAT) or
             (self.get( "nnr_compressed_data_unit_payload_type" ) == CompressedDataUnitPayloadType.NNR_PT_BLOCK)
@@ -453,7 +490,7 @@ class Coder():
                 self.tensor_dimensions_list()
             if self.get("nnr_compressed_data_unit_payload_type") != CompressedDataUnitPayloadType.NNR_PT_BLOCK:
                 if self.get("nnr_multiple_topology_elements_present_flag") == 1:
-                    self.topology_tensor_dimension_mapping()
+                    self.topology_tensor_dimension_mapping() ##TODO: To be implemented
             if self.get( "cabac_unary_length_flag" ) == 1:
                 self.process( "cabac_unary_length_minus1", "u", 8 )
         yield # pause execution so that tensor dimensions can be properly set based on compressed_parameter_types
@@ -465,7 +502,9 @@ class Coder():
         ):
                 self.codebook("dc")
 
-        if self.get("count_tensor_dimensions") > 1:
+        if self.get("count_tensor_dimensions") > 1: ##TODO TDR: process first_tensor_dimension_shift here!
+                if(self.get("general_profile_idc") == 1):
+                    self.process("first_tensor_dimension_shift", "ue", 1)
                 self.process( "scan_order", "u", 4 )
                 if( self.get("scan_order") > 0 ):
                     tensorDimensions   = self.get( "tensor_dimensions" )
@@ -504,7 +543,7 @@ class Coder():
         for j in range( self.get( "count_tensor_dimensions" ) ):
             self.process( "tensor_dimensions[%d]" % j, "ue", 7 )
 
-    def topology_elements_ids_list(self, topologyIndexedFlag): 
+    def topology_elements_ids_list(self, topologyIndexedFlag):
         self.process( "count_topology_elements_minus2", "ue", 7 )
         if topologyIndexedFlag == 0:
             self.__coder.byte_alignment()
@@ -517,8 +556,8 @@ class Coder():
             else:
                self.process( "topology_elem_id_index_list[%d]" % j, "ue", 7 )
         if topologyIndexedFlag == 1:
-           self.__coder.byte_alignment()
-    
+            self.__coder.byte_alignment()
+
     def topology_tensor_dimension_mapping(self):
         raise NotImplementedError("topology_tensor_dimension_mapping not yet implemented!")
 
@@ -553,7 +592,25 @@ class Coder():
         self.process( "mps_decomposition_performance_map_flag", "u",  1 )
         self.process( "mps_quantization_method_flags", "u",  3 )
         self.process( "mps_topology_indexed_reference_flag", "u", 1 )
-        self.process( "nnr_reserved_zero_7bits", "u", 7 )
+        if self.get( "general_profile_idc" ) == 1:
+            self.process( "base_model_id_present_flag"              , "u", 1 )
+            self.process( "validation_set_performance_present_flag" , "u", 1 )
+            self.process( "metric_type_performance_map_valid_flag"  , "u", 1 )
+            self.process( "mps_parent_signalling_enabled_flag"      , "u", 1 )
+            if self.get( "mps_parent_signalling_enabled_flag" ) == 1:
+                self.process( "nnr_pre_flag" , "u", 1 )
+            else:
+                self.process( "nnr_reserved_zero_1bit", "u", 1 )
+            self.process( "nnr_reserved_zero_2bits" , "u", 2 )
+            if self.get( "base_model_id_present_flag" ) == 1:
+                self.process( "base_model_id", "st" )
+            if (
+                (self.get( "validation_set_performance_present_flag" ) == 1) or
+                (self.get( "metric_type_performance_map_valid_flag" )  == 1)
+            ):
+                self.process( "performance_metric_type", "st" )
+        else:
+            self.process( "nnr_reserved_zero_7bits", "u", 7 )
         if (
             (self.get( "mps_quantization_method_flags" ) & QuantizationMethodFlags.NNR_QSU != 0) or
             (self.get( "mps_quantization_method_flags" ) & QuantizationMethodFlags.NNR_QCB != 0)
@@ -568,6 +625,11 @@ class Coder():
             self.unification_performance_map()
         if self.get( "mps_decomposition_performance_map_flag" ) == 1:
             self.decomposition_performance_map()
+        if (
+            (self.get( "general_profile_idc" )                     == 1) and
+            (self.get( "validation_set_performance_present_flag" ) == 1)
+        ):
+            self.process("validation_set_performance", "flt", 32)
         self.__coder.byte_alignment()
 
     def sparsification_performance_map(self):
