@@ -94,8 +94,10 @@ When successfully installed, the software outputs the line : "Successfully insta
 ### Importing the main module
 
 After installation the software can be used by importing the main python module 'nnc':
+
 ```python
-import nnc
+
+from src.nncodec import nnc
 ```
 
 ## References and Publications
