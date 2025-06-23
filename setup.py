@@ -46,7 +46,7 @@ import setuptools
 
 # --------- Metadata ---------
 MIN_PYTHON = (3, 8)
-__version__ = '2.0.0'
+__version__ = '2.0.1'
 if sys.version_info < MIN_PYTHON:
     sys.exit(f"Python {MIN_PYTHON[0]}.{MIN_PYTHON[1]} or later is required.")
 
@@ -143,6 +143,8 @@ setup(
     url='https://hhi.fraunhofer.de',
     description='Fraunhofer HHI implementation of the Neural Network Coding (NNC) Standard',
     long_description=open("README.md", encoding="utf-8").read(),
+    license='BSD',
+    license_files=['LICENSE'],
     long_description_content_type="text/markdown",
     packages=find_packages(where="src"),
     package_dir={"": "src"},
