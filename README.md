@@ -1,8 +1,8 @@
 <div align="center">
 
-![nncodec_logo](https://github.com/d-becking/nncodec-icml-2023-demo/assets/56083075/f310c92e-537e-4960-b223-7ec51c9accc3)
+<img src="https://github.com/fraunhoferhhi/nncodec/assets/65648299/69b41b38-19ed-4c45-86aa-2b2cd4d835f7" width="660"/>
 
-# A Software Implementation of the Neural Network Coding (NNC) Standard [ISO/IEC 15938-17] 
+# A Software Implementation of the ISO/IEC 15938-17 Neural Network Coding (NNC) Standard
 
 </div>
 
@@ -66,44 +66,115 @@ import nncodec
 ```
 
 ## NNCodec Usage
-![NNCodec2](https://github.com/user-attachments/assets/564b9d02-a706-459a-a8bb-241d2ec4608f)
+<img src="https://github.com/user-attachments/assets/564b9d02-a706-459a-a8bb-241d2ec4608f" width="660"/>
 
-### [TBD]
+NNCodec 2.0, as depicted above, includes three main pipelines:
+- One for tensorial data in AI-based media processing (e.g., function coefficients, feature maps, ...),
+  ```python
+  from nncodec.tensor import encode, decode
+  ```
+- one for coding entire neural networks (or their differential updates), and
+  ```python
+  from nncodec.nn import encode, decode
+  ```
+- one for federated learning scenarios.
+  ```python
+  from nncodec.fl import NNClient, NNCFedAvg
+  ```
 
-#### Logging (comparative) results using Weights & Biases
+### Coding Tensors in AI-based Media Processing (TAIMP)
 
-We used Weights & Biases (wandb) for experiment logging. Enabling `--wandb` also enables Huffman and bzip2 encoding of the data payloads and the calculation of the Shannon entropy. If you want to use it, add your wandb key and optionally an experiment identifier for the run (--wandb_run_name).
+The [tensor_coding.py](https://github.com/d-becking/nncodec2/blob/master/example/tensor_coding.py) script provides
+encoding and decoding examples of random tensors.
+The first example codes a random tensor (which could also be an integer tensor):
 
-```shell
---wandb, --wandb_key, --wandb_run_name
+```python
+example_tensor = torch.randn(256, 64, 64) # torch.randint(0, 255, (3, 3, 32, 32)) # example 8-bit uint tensor
+bitstream = encode(example_tensor, args_dict) 
+dec_tensor = torch.tensor(decode(bitstream, args_dict["tensor_id"]), device=device, dtype=torch.float32)
+```
+here, `args_dict` is a python dictionary that specifies the encoding configuration. The default configuration is:
+
+```python
+args_dict = { 'approx_method': 'uniform', # Quantization method [uniform or codebook]
+              'qp': -32, # main quantization parameter (QP)
+              'nonweight_qp': -75, # QP for non-weights, e.g., 1D or BatchNorm params (default: -75, i.e., fine quantization)
+              'use_dq': True, # enables dependent scalar / Trellis-coded quantization
+              'bitdepth': None, # Optional: integer-aligned bitdepth for limited precision [1, 31] bit; note: overwrites QPs.
+              'quantize_only': False, # if True encode() returns quantized parameter instead of bitstream 
+              'tca': False, # enables Temporal Context Adaptation (TCA)
+              'row_skipping': True, # enables skipping tensor rows from arithmetic coding if entirely zero
+              'sparsity': 0.0, # introduces mean- & std-based unstructured sparsity [0.0, 1.0]
+              'struct_spars_factor': 0.0, # introduces structured per-channel sparsity (based on channel means); requires sparsity > 0.0
+              'job_identifier': 'TAIMP_coding', # Name extension for generated *.nnc bitstream files and for logging
+              'results': '.', # path where results / bitstreams shall be stored
+              'tensor_id': '0', # identifier for tensor
+              'tensor_path': None, # path to tensor to be encoded
+              'compress_differences': False, # if True bitstream represents a differential update of a base tensor; set automatically if TCA enabled
+              'verbose': True # print stdout process information.
+             }
+```
+
+The second example - if tensor_coding.py run with `--incremental` - updates 50% of the example tensor's elements for `num_increments`
+iterartions and stores the previously decoded collocated tensor in `approx_param_base`, to use it for Temporal Context Adaptation (TCA).
+
+`approx_param_base` must be initialized with 
+```python
+approx_param_base = {"parameters": {}, "put_node_depth": {}, "device_id": 0, "parameter_id": {}} 
+```
+
+### Coding Neural Networks and Differential Neural Network Updates
+[TBD]
+### Federated Learning with NNCodec
+[TBD]
+### Logging results using Weights & Biases
+
+We used Weights & Biases (wandb) for experimental results logging. Enable `--wandb` if you want to use it. Add your wandb key and optionally an experiment identifier for the run:
+
+```bash
+--wandb, --wandb_key="my_key", --wandb_run_name="my_project"
 ```
 
 ## Paper results
 
 
-- ### EuCNC 2025 Poster Session
-    We present **"Efficient Federated Learning Tiny Language Models for Mobile Network Feature Prediction"** at the Poster Session I of the 2025 Joint European Conference on Networks and Communications & 6G Summit (EuCNC/6G Summit).
+- ### EuCNC 2025 Poster Session  
+  [![Conference](https://img.shields.io/badge/EuCNC-Paper-blue)](https://arxiv.org/abs/2504.01947)
 
-    **TL;DR** -  This work introduces a communication-efficient Federated Learning (FL) framework for training tiny language models (TLMs) that collaboratively learn to predict mobile network features (such as ping, SNR or frequency band) across five geographically distinct regions from the Berlin V2X dataset. Using NNCodec, the framework reduces communication overhead by over 99% with minimal performance degradation, enabling scalable FL deployment across autonomous mobile network cells.
+  We presented **"Efficient Federated Learning Tiny Language Models for Mobile Network Feature Prediction"** at the Poster Session I of the 2025 Joint European Conference on Networks and Communications & 6G Summit (EuCNC/6G Summit).
+    
+  **TL;DR** -  This work introduces a communication-efficient Federated Learning (FL) framework for training tiny language models (TLMs) that collaboratively learn to predict mobile network features (such as ping, SNR or frequency band) across five geographically distinct regions from the Berlin V2X dataset. Using NNCodec, the framework reduces communication overhead by over 99% with minimal performance degradation, enabling scalable FL deployment across autonomous mobile network cells.
+  <img src="https://github.com/user-attachments/assets/4fba1aca-50ca-492f-901b-d601cc20874c" width="750" /> <br>
 
-    <img src="https://github.com/user-attachments/assets/4fba1aca-50ca-492f-901b-d601cc20874c" width="750" /> <br>
+  To reproduce the experimental results and evaluate NNCodec in the telco FL setting described above, execute:
 
-    The codebase for reproducing experimental results and evaluating NNCodec in an FL environment is available here:
+  ```bash
+  python example/nnc_fl.py --dataset=V2X --dataset_path=<your_path>/v2x --model=tinyllama --model_rand_int --num_clients=5 --epochs=30 --compress_upstream --compress_downstream --err_accumulation --compress_differences --qp=-18 --batch_size=8 --max_batches=300 --max_batches_test=150 --sparsity=0.8 --struct_spars_factor=0.9 --TLM_size=1 --tca --tokenizer_path=./example/tokenizer/telko_tokenizer.model
+  ```
 
-    [![Conference](https://img.shields.io/badge/EuCNC-Paper-blue)](https://arxiv.org/abs/2504.01947)
+  The pre-tokenized [Berlin V2X dataset](https://ieee-dataport.org/open-access/berlin-v2x) can be downloaded here: https://datacloud.hhi.fraunhofer.de/s/CcAeHRoWRqe5PiQ
+  and the pretrained Sentencepiece Tokenizer is included in this repository at [telko_tokenizer.model](https://github.com/d-becking/nncodec2/blob/master/example/tokenizer/).
+  
+  Resulting bitstreams and the best performing global TLM of all communication rounds will be stored in a `results` directory (with path set via `--results`).
+  Evaluating this model is possible by executing:
 
+  ```bash
+  python example/eval.py --model_path=<your_path>/best_tinyllama_.pt --batch_size=1 --dataset=V2X --dataset_path=<your_path>/v2x --model=tinyllama --TLM_size=1 --tokenizer_path=./example/tokenizer/telko_tokenizer.model
+  ```
 
 
 - ### ICML 2023 Neural Compression Workshop
-    Our paper titled **"NNCodec: An Open Source Software Implementation of the Neural Network Coding 
-ISO/IEC Standard"** was awarded a Spotlight Paper at the ICML 2023 Neural Compression Workshop.
+  [![Conference](https://img.shields.io/badge/ICML-Paper-blue)](https://openreview.net/forum?id=5VgMDKUgX0)
 
-    **TL;DR** -  The paper presents NNCodec, analyses its coding tools with respect to the principles of information theory and gives comparative results for a broad range of neural network architectures. 
+  Our paper titled **"NNCodec: An Open Source Software Implementation of the Neural Network Coding 
+  ISO/IEC Standard"** was awarded a Spotlight Paper at the ICML 2023 Neural Compression Workshop.
 
+    **TL;DR** -  The paper presents NNCodec 1.0, analyses its coding tools with respect to the principles of information theory and gives comparative results for a broad range of neural network architectures.
     The code for reproducing the experimental results of the paper and a software demo are available 
 here:
-
-    [![Conference](https://img.shields.io/badge/ICML-Paper-blue)](https://openreview.net/forum?id=5VgMDKUgX0)
+  
+  [![Conference](https://img.shields.io/badge/ICML-Code-red)](https://github.com/d-becking/nncodec-icml-2023-demo)
+    
 
 
 ## Citation and Publications
