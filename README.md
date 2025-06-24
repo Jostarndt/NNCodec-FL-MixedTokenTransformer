@@ -66,6 +66,7 @@ import nncodec
 ```
 
 ## NNCodec Usage
+![NNCodec2](https://github.com/user-attachments/assets/564b9d02-a706-459a-a8bb-241d2ec4608f)
 
 ### [TBD]
 
