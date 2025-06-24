@@ -41,7 +41,7 @@ NNCodec provides an encoder and decoder with the following main features:
 - User-friendly interface
 - Built-in support for common deep learning frameworks (e.g., PyTorch)
 - Integrated support for data-driven compression tools on common datasets (ImageNet, CIFAR, PascalVOC)
-- Built-in support for [Flower](https://flower.ai), a prominent and widely used Federated AI framework
+- Built-in support for [*Flower*](https://flower.ai), a prominent and widely used Federated AI framework
 - Separate pipelines for Neural Network (NN) Coding, Tensor Coding, and Federated Learning
 
 
@@ -54,19 +54,21 @@ NNCodec provides an encoder and decoder with the following main features:
 
 ### Package installation
 
-NNCodec V2 supports pip installation:
+NNCodec 2.0 supports pip installation:
 
 ```bash
 pip install nncodec
 ```
 
-After installation the software can be used by importing the main module:
+After installation, the software can be used by importing the main module:
 ```python
 import nncodec
 ```
 
 ## NNCodec Usage
+<div align="center">
 <img src="https://github.com/user-attachments/assets/564b9d02-a706-459a-a8bb-241d2ec4608f" width="660"/>
+</div>
 
 NNCodec 2.0, as depicted above, includes three main pipelines:
 - One for tensorial data in AI-based media processing (e.g., function coefficients, feature maps, ...),
@@ -115,7 +117,7 @@ args_dict = { 'approx_method': 'uniform', # Quantization method [uniform or code
              }
 ```
 
-The second example - if tensor_coding.py run with `--incremental` - updates 50% of the example tensor's elements for `num_increments`
+The second example — if tensor_coding.py run with `--incremental` — updates 50% of the example tensor's elements for `num_increments`
 iterartions and stores the previously decoded collocated tensor in `approx_param_base`, to use it for Temporal Context Adaptation (TCA).
 
 `approx_param_base` must be initialized with 
@@ -125,8 +127,45 @@ approx_param_base = {"parameters": {}, "put_node_depth": {}, "device_id": 0, "pa
 
 ### Coding Neural Networks and Differential Neural Network Updates
 [TBD]
+
 ### Federated Learning with NNCodec
-[TBD]
+
+The [nnc_fl.py](https://github.com/d-becking/nncodec2/blob/master/example/nnc_fl.py) file implements a base script for communication-efficient
+Federated Learning with NNCodec. It imports the `NNClient` and `NNCFedAvg` classes — specialized NNC-[*Flower*](https://flower.ai) objects — that 
+are responsible for establishing and handling the compressed FL environment.
+
+The default configuration launches FL with two ResNet-56 clients learning the CIFAR-100 classification task. The CIFAR dataset
+is automatically downloaded if not available under `--dataset_path` (~170MB).
+```bash
+python example/nnc_fl.py --dataset_path=<your_path> --model_rand_int --epochs=30 --compress_upstream --compress_downstream --err_accumulation --compress_differences
+```
+
+Main coding tools and hyperparameter settings for coding are:
+```bash
+--qp   'Quantization parameter (QP) for NNs (default: -32)'
+--diff_qp   'Quantization parameter for dNNs. Defaults to QP if unspecified (default: None)'
+--nonweight_qp  'QP for non-weights, e.g., 1D or fBatchNorm params (default: -75)'
+--opt_qp  'Enables layer-wise QP modification based on relative layer size within NN'
+--use_dq  'Enables dependent scalar / Trellis-coded quantization'
+--bitdepth 'Optional: integer-aligned bitdepth for limited precision [1, 31] bit; note: overwrites QPs.'
+--bnf  'Enables incremental BatchNorm Folding (BNF)'
+--sparsity  'Introduces mean- & std-based unstructured sparsity [0.0, 1.0] (default: 0.0)'
+--struct_spars_factor 'Introduces structured per-channel sparsity (based on channel means); requires sparsity > 0 (default: 0.9)'
+--row_skipping  'Enables skipping tensor rows from arithmetic coding that are entirely zero'
+--tca 'Enables Temporal Context Adaptation (TCA)'
+```
+
+Additional important hyperparameters for FL (among others in [nnc_fl.py](https://github.com/d-becking/nncodec2/blob/master/example/nnc_fl.py)):
+```bash
+--compress_differences  'Weight differences wrt. to base model (dNN) are compressed, otherwise full base models (NN) are communicated'
+--model_rand_int 'If set, model is randomly initialized, i.e., w/o loading pre-trained weights'
+--num_clients 'Number of clients in FL scenario (default: 2)'
+--compress_upstream 'Compression of clients-to-server communication'
+--compress_downstream 'Compression of server-to-clients communication'
+--err_accumulation  'If set, quantization errors are locally accumulated ("residuals") and added to NN update prior to compression'
+```
+Section [Paper results](#EuCNC-2025-Poster-Session) (EuCNC) below introduces an additional use case and implementation of NNCodec 2.0 FL with tiny language models collaboratively learning feature predictions in cellular data.
+
 ### Logging results using Weights & Biases
 
 We used Weights & Biases (wandb) for experimental results logging. Enable `--wandb` if you want to use it. Add your wandb key and optionally an experiment identifier for the run:

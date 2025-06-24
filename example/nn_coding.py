@@ -121,7 +121,7 @@ parser.add_argument("--wandb", action="store_true", help='Use Weights & Biases f
 parser.add_argument('--wandb_key', type=str, default='', help='Authentication key for Weights & Biases API account ')
 parser.add_argument('--wandb_run_name', type=str, default='NNC_WP_spars', help='Identifier for current run')
 parser.add_argument("--pre_train_model", action="store_true", help='Training the full model prior to compression')
-parser.add_argument("--plot_feature_maps", action="store_true", help='Plot features, i.e., in- and output activations')
+parser.add_argument("--print_comp_complexity", action="store_true", help='Print model computational complexity')
 parser.add_argument("--plot_segmentation_masks", action="store_true", help='Plot predicted segmentation masks')
 parser.add_argument("--verbose", action="store_true", help='Stdout process information.')
 parser.add_argument('--cuda_device', type=int, default=0)
@@ -183,16 +183,17 @@ def main():
                                                                                            dataset_path=args.dataset_path,
                                                                                            batch_size=args.batch_size,
                                                                                            num_workers=args.workers)
-    for idx, (i, l) in enumerate(test_loader):
-        if idx >= 1:
-            break
-        input_shape = tuple(i.shape[1:])
-    macs, params = get_model_complexity_info(model, input_shape, as_strings=False,
-                                             print_per_layer_stat=True, verbose=args.verbose,
-                                             ignore_modules=[torch.nn.MultiheadAttention])
+    if args.print_comp_complexity:
+        for idx, (i, l) in enumerate(test_loader):
+            if idx >= 1:
+                break
+            input_shape = tuple(i.shape[1:])
+        macs, params = get_model_complexity_info(model, input_shape, as_strings=False,
+                                                 print_per_layer_stat=True, verbose=args.verbose,
+                                                 ignore_modules=[torch.nn.MultiheadAttention])
 
-    print('{:<30}  {:<8}'.format('Computational complexity: ', macs))
-    print('{:<30}  {:<8}'.format('Number of parameters: ', params))
+        print('{:<30}  {:<8}'.format('Computational complexity: ', macs))
+        print('{:<30}  {:<8}'.format('Number of parameters: ', params))
 
     test_perf = evaluate_classification_model(model, criterion, test_loader, test_set, device=device,
                                                               verbose=args.verbose, max_batches=args.max_batches)
