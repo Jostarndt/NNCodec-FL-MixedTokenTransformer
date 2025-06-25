@@ -118,6 +118,7 @@ def main():
     else:
         example_tensor = torch.randn(256, 64, 64, device=device)
         # example_tensor = torch.randint(0, 255, (3, 3, 32, 32), device=device) # example integer tensor
+        # example_tensor = np.random.rand(256, 64, 64) # example numpy tensor
 
     if not args.incremental:
         # --- NNCodec ---

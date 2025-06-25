@@ -66,7 +66,7 @@ nncargs = {'approx_method': 'uniform',
            'verbose': False
            }
 
-def encode(model, args, epoch=0, nnc_mdl=None, model_executer=None, blkid_ptypes=None, approx_param_base=None, device_id=None):
+def encode(model, args=None, epoch=0, nnc_mdl=None, model_executer=None, blkid_ptypes=None, approx_param_base=None, device_id=None):
     if args == None:
         args = nncargs.copy()
     elif isinstance(args, dict):

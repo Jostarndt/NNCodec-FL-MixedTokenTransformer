@@ -83,7 +83,7 @@ def encode(tensor, args=None, approx_param_base=None, quantize_only=False):
         nnc_tensor = {f'{args["tensor_id"]}': np.int32(tensor.data.cpu().detach().numpy()) if tensor.data.cpu().detach().numpy().dtype in type_list_int
                                                                         else tensor.data.cpu().detach().numpy()}
     elif isinstance(tensor, np.ndarray):
-        nnc_tensor = {f'{args["tensor_id"]}': np.int32(tensor) if tensor.dtype in type_list_int else tensor}
+        nnc_tensor = {f'{args["tensor_id"]}': np.int32(tensor) if tensor.dtype in type_list_int else np.float32(tensor)}
 
     print(f"Tensor inherent sparsity: {get_sparsity(nnc_tensor) * 100:.2f}%")
     if args["sparsity"] > 0:

@@ -94,27 +94,27 @@ from nncodec.framework.applications import models, datasets
 parser = argparse.ArgumentParser(description='NNCodec for entire Neural Networks')
 parser.add_argument('--uc', type=int, default=0, help='Use cases (default: 0) [0: non-incremental, 1: incremental, 2: incremental differences]')
 parser.add_argument('--qp', type=int, default=-32, help='quantization parameter for NNs (default: -32)')
-parser.add_argument('--diff_qp', type=int, default=None, help='quantization parameter for dNNs. Defaults to qp if unspecified (default: None)')
 parser.add_argument('--qp_density', type=int, default=2, help='quantization scale parameter (default: 2)')
-parser.add_argument('--nonweight_qp', type=int, default=-75, help='qp for non-weights, e.g. BatchNorm params (default: -75)')
-parser.add_argument("--opt_qp", action="store_true", help='Modifies QP layer-wise')
+parser.add_argument('--nonweight_qp', type=int, default=-75, help='qp for non-weights, e.g., 1D or BatchNorm params (default: -75)')
+parser.add_argument("--opt_qp", action="store_true", help='Modifies QP layer-wise based on relative layer size within NN')
 parser.add_argument("--use_dq", action="store_true", help='Enable dependent scalar / Trellis-coded quantization')
-parser.add_argument('--bitdepth', type=int, default=8, help='Optional: integer-aligned bitdepth for limited precision (default: None); note: overwrites QPs.')
+parser.add_argument('--approx_method', type=str, default='uniform',  help='Approximation method [uniform or codebook]')
+parser.add_argument('--bitdepth', type=int, default=None, help='Optional: integer-aligned bitdepth for limited precision (default: None); note: overwrites QPs.')
 parser.add_argument("--lsa", action="store_true", help='Enable Local Scaling Adaptation')
 parser.add_argument("--bnf", action="store_true", help='Enable BatchNorm Folding')
 parser.add_argument('--sparsity', type=float, default=0.0, help='Sparsity rate (default: 0.0)')
 parser.add_argument('--struct_spars_factor', type=float, default=0.0, help='Factor for structured sparsification (default: 0.9)')
 parser.add_argument('--row_skipping', action='store_true', help='Enable Row Skipping')
 parser.add_argument('--tca', action='store_true', help='Enable Temporal Context Adaptation')
-parser.add_argument('--batch_size', type=int, default=64, help='Batch size for training (default=64)')
+parser.add_argument('--batch_size', type=int, default=32, help='Batch size for training (default=64)')
 parser.add_argument('--epochs', type=int, default=10, help='Number of epochs to train (default: 10)')
 parser.add_argument('--max_batches', type=int, default=None, help='Max num of batches to process (default: 0, i.e., all)')
 parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate (default: 1e-3)')
-parser.add_argument('--model', type=str, default='resnet56', metavar=f'any of {models.__all__} or {torchvision.models.list_models(torchvision.models)}')
+parser.add_argument('--model', type=str, default=None, metavar=f'any of {models.__all__} or {torchvision.models.list_models(torchvision.models)}')
 parser.add_argument('--model_path', type=str, default=None, metavar='./example/ResNet56_CIF100.pt')
 parser.add_argument('--model_rand_int', action="store_true", help='model randomly initialized, i.e., w/o loading pre-trained weights')
-parser.add_argument('--dataset', type=str, default='cifar100', metavar=f"Any of {datasets.__all__}")
-parser.add_argument('--dataset_path', type=str, default='../data')
+parser.add_argument('--dataset', type=str, default=None, metavar=f"Any of {datasets.__all__}")
+parser.add_argument('--dataset_path', type=str, default=None, metavar='../data')
 parser.add_argument('--results', type=str, default='./results')
 parser.add_argument('--workers', type=int, default=4, help='Number of data loading workers (default: 4)')
 parser.add_argument("--wandb", action="store_true", help='Use Weights & Biases for data logging')
@@ -122,15 +122,12 @@ parser.add_argument('--wandb_key', type=str, default='', help='Authentication ke
 parser.add_argument('--wandb_run_name', type=str, default='NNC_WP_spars', help='Identifier for current run')
 parser.add_argument("--pre_train_model", action="store_true", help='Training the full model prior to compression')
 parser.add_argument("--print_comp_complexity", action="store_true", help='Print model computational complexity')
-parser.add_argument("--plot_segmentation_masks", action="store_true", help='Plot predicted segmentation masks')
 parser.add_argument("--verbose", action="store_true", help='Stdout process information.')
 parser.add_argument('--cuda_device', type=int, default=0)
 
 
 def main():
     args = parser.parse_args()
-    if args.diff_qp == None:
-        args.diff_qp = args.qp
 
     if torch.backends.mps.is_available():
         device = torch.device("mps")
@@ -158,17 +155,18 @@ def main():
     elif args.model in torchvision.models.segmentation.deeplabv3.__all__:
         model = torchvision.models.get_model(args.model, weights="DEFAULT" if not args.model_rand_int else None)
     else:
-        assert 0, f"Model not specified in /framework/applications/models and not available in torchvision model zoo" \
-                  f"{torchvision.models.list_models(torchvision.models)})"
+        print(f"Model not specified in /framework/applications/models and not available in torchvision model zoo" \
+                  f"{torchvision.models.list_models(torchvision.models)})")
+        model = None
 
-    if not args.model_rand_int and args.model_path and os.path.exists(args.model_path):
-        model.load_state_dict(torch.load(args.model_path))
+    if model and not args.model_rand_int and args.model_path and os.path.exists(args.model_path):
+        model.load_state_dict(torch.load(args.model_path, map_location=device))
 
     if args.wandb:
         wandb.init(
             config=args,
             project=f"{args.model}_{args.dataset}_{args.wandb_run_name}",
-            name=f"UC_{args.uc}_lr_{args.lr}_qp_{args.qp}_diff_qp_{args.diff_qp}_opt_{args.opt_qp}_dq_{args.use_dq}_bnf_{args.bnf}_lsa_{args.lsa}",
+            name=f"UC_{args.uc}_lr_{args.lr}_qp_{args.qp}_opt_{args.opt_qp}_dq_{args.use_dq}_bnf_{args.bnf}_lsa_{args.lsa}",
             entity="edl-group",
             save_code=True,
             dir=f"{args.results}"
@@ -177,12 +175,17 @@ def main():
 
     criterion = torch.nn.CrossEntropyLoss()
     UCS = {'cifar100': 'NNR_PYT_CIF100', 'cifar10': 'NNR_PYT_CIF10', 'imagenet200': 'NNR_PYT_IN200', 'voc': 'NNR_PYT_VOC'}
-    use_case_name = UCS[args.dataset] if args.dataset in UCS else 'NNR_PYT'
+    use_case_name = UCS[args.dataset] if args.dataset and args.dataset in UCS else 'NNR_PYT'
 
-    test_set, test_loader, val_set, val_loader, train_loader = __initialize_data_functions(handler=use_cases[use_case_name],
-                                                                                           dataset_path=args.dataset_path,
-                                                                                           batch_size=args.batch_size,
-                                                                                           num_workers=args.workers)
+    if args.dataset:
+        test_set, test_loader, val_set, val_loader, train_loader = __initialize_data_functions(handler=use_cases[use_case_name],
+                                                                                            dataset_path=args.dataset_path,
+                                                                                            batch_size=args.batch_size,
+                                                                                            num_workers=args.workers)
+        test_perf = evaluate_classification_model(model, criterion, test_loader, test_set, device=device,
+                                                  verbose=args.verbose, max_batches=args.max_batches)
+        print(f"Initial test performance: {[str(k) + ': ' + str(v) for k, v in test_perf.items()]}")
+
     if args.print_comp_complexity:
         for idx, (i, l) in enumerate(test_loader):
             if idx >= 1:
@@ -195,9 +198,6 @@ def main():
         print('{:<30}  {:<8}'.format('Computational complexity: ', macs))
         print('{:<30}  {:<8}'.format('Number of parameters: ', params))
 
-    test_perf = evaluate_classification_model(model, criterion, test_loader, test_set, device=device,
-                                                              verbose=args.verbose, max_batches=args.max_batches)
-    print(f"Initial test performance: {[str(k) + ': ' + str(v) for k, v in test_perf.items()]}")
 
     ### optionally pre-train the neural network model for args.epochs
     if args.pre_train_model:
@@ -220,26 +220,40 @@ def main():
                 best_acc = test_acc
                 torch.save(model.state_dict(), f"{args.results}/{model}_retrained.pt")
 
-    if args.uc == 0:
-        bitstream = encode(model, vars(args), use_case_name)
-        rec_mdl_params, bs_size = decode(bitstream, model, vars(args))
+    if args.uc == 0: # enc/dec examples of entire neural networks
 
-        ### evaluation of decoded and reconstructed model
-        model.load_state_dict(np_to_torch(rec_mdl_params), strict=False if args.bnf else True)
+        if model is None:
+            num_layers = 5
+            print(f"Example coding dict of random numpy arrays representing for instance a {num_layers}-layer NN:")
+            model = {f"parameter_{i}": np.random.randn(np.random.randint(1, 36),
+                                                       np.random.randint(1, 303)).astype(np.float32) for i in range(num_layers)}
+            bitstream = encode(model, vars(args))
+            rec_mdl_params = decode(bitstream, vars(args))
 
-        torch.save(model.state_dict(), f"{args.results}/{args.model}_dict_dec_rec.pt")
+        elif args.model:
+            bitstream = encode(model, vars(args), use_case_name)
+            rec_mdl_params = decode(bitstream, vars(args))
 
-        test_perf = evaluate_classification_model(model, criterion, test_loader, test_set, device=device, verbose=args.verbose, max_batches=args.max_batches)
-        print(f"Reconstructed test performance: {[str(k) + ': ' + str(v) for k, v in test_perf.items()]}")
+            ### evaluation of decoded and reconstructed model
+            model.load_state_dict(np_to_torch(rec_mdl_params), strict=False if args.bnf else True)
+
+            torch.save(model.state_dict(), f"{args.results}/{args.model}_dict_dec_rec.pt")
+
+            if args.dataset:
+                test_perf = evaluate_classification_model(model, criterion, test_loader, test_set, device=device, verbose=args.verbose, max_batches=args.max_batches)
+                print(f"Reconstructed test performance: {[str(k) + ': ' + str(v) for k, v in test_perf.items()]}")
 
         if args.wandb:
             wandb.log(test_perf)
 
-    elif args.uc == 1:
+    elif args.uc == 1: # enc/dec example of incremental full neural networks
+
         bs_size_acc = 0
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
         if args.wandb:
             wandb.watch(model, log="all", log_graph=True)
+        approx_param_base = {"parameters": {}, "put_node_depth": {}, "device_id": 0, "parameter_id": {}} if args.tca else None
+
         for e in range(args.epochs):
 
             print(f"Epoch {e}")
@@ -251,10 +265,10 @@ def main():
             test_perf_uc = evaluate_classification_model(updated_mdl, criterion, test_loader, test_set, device=device, verbose=args.verbose)
             print(f"Uncompressed test performance: {[str(k) + ': ' + str(v) for k, v in test_perf_uc.items()]}")
 
-            bitstream = encode(model, vars(args), use_case_name, epoch=e)
-            rec_mdl_params, bs_size = decode(bitstream, model, vars(args))
+            bitstream = encode(model, vars(args), use_case_name, epoch=e, approx_param_base=approx_param_base)
+            rec_mdl_params = decode(bitstream, vars(args), approx_param_base=approx_param_base)
 
-            bs_size_acc += bs_size
+            bs_size_acc += len(bitstream)
 
             ### evaluation of decoded and reconstructed model
             rec_mdl = copy.deepcopy(model)
@@ -270,14 +284,17 @@ def main():
                 wandb.log({"train_perf": train_perf,
                            "test_perf_uc": test_perf_uc,
                            "rec_test_perf": test_perf,
-                           "bs_size": bs_size,
+                           "bs_size": len(bitstream),
                            "accumulated_bs_size": bs_size_acc})
 
-    elif args.uc == 2:
+    elif args.uc == 2: # enc/dec example of incremental differential neural networks
+
         bs_size_acc = 0
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
         if args.wandb:
             wandb.watch(model, log="all", log_graph=True)
+        approx_param_base = {"parameters": {}, "put_node_depth": {}, "device_id": 0, "parameter_id": {}} if args.tca else None
+
         for e in range(args.epochs):
 
             print(f"Epoch {e}")
@@ -290,15 +307,16 @@ def main():
             print(f"Uncompressed test performance: {[str(k) + ': ' + str(v) for k, v in test_perf_uc.items()]}")
 
             if e == 0:
-                dNN = updated_mdl
+                dNN = torch_to_numpy(updated_mdl.state_dict())
             else:
                 dNN = model_diff(torch_to_numpy(updated_mdl.state_dict()), torch_to_numpy(prev_mdl.state_dict()))
 
             # compression
-            bitstream = encode(dNN, vars(args), use_case_name, incremental=True if e > 0 else False, epoch=0)
-            rec_mdl_params, bs_size = decode(bitstream, model, vars(args))
+            bitstream = encode(dNN, vars(args), use_case_name, incremental=True, epoch=e,
+                               approx_param_base=approx_param_base)
+            rec_mdl_params = decode(bitstream, vars(args), approx_param_base=approx_param_base)
 
-            bs_size_acc += bs_size
+            bs_size_acc += len(bitstream)
 
             ### evaluation of decoded and reconstructed model
             if e == 0:
@@ -318,7 +336,7 @@ def main():
                 wandb.log({"train_perf": train_perf,
                            "test_perf_uc": test_perf_uc,
                            "rec_test_perf": test_perf,
-                           "bs_size": bs_size,
+                           "bs_size": len(bitstream),
                            "accumulated_bs_size": bs_size_acc})
 
     if args.wandb:

@@ -104,6 +104,8 @@ def compress_model( model_path_or_object,
                     bnf=False,
                     lsa=False,
                     fine_tune=False,
+                    row_skipping=False,
+                    tca=False,
                     block_id_and_param_type=None,
                     model_name=None,
                     model_executer=None,
@@ -118,7 +120,10 @@ def compress_model( model_path_or_object,
                     return_model_data=False,
                     verbose=True,
                     return_bitstream=False,
-                    wandb_logging=False
+                    wandb_logging=False,
+                    approx_param_base = None,
+                    device_id = 0,
+                    int_quant_bw = False,
                    ):
 
     is_pyt_model = False
@@ -262,12 +267,17 @@ def compress_model( model_path_or_object,
                             bnf=bnf,
                             lsa=lsa,
                             fine_tune=fine_tune,
+                            row_skipping=row_skipping,
+                            tca=tca,
                             block_id_and_param_type=block_id_and_param_type,
                             model=nnc_mdl,
                             model_executer=nnc_mdl_executer,
                             verbose=verbose,
                             return_bitstream=return_bitstream,
-                            wandb_logging=wandb_logging
+                            wandb_logging=wandb_logging,
+                            approx_param_base=approx_param_base,
+                            device_id=device_id,
+                            int_quant_bw = int_quant_bw,
                             )
 
     if bnf: #ADDED for ICML

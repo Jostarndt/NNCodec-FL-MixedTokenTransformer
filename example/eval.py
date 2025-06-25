@@ -94,7 +94,6 @@ from nncodec.framework.applications import models, datasets
 
 parser = argparse.ArgumentParser(description='Evaluation Script for TinyLlama on V2X')
 parser.add_argument('--qp', type=int, default=-32, help='quantization parameter for NNs (default: -32)')
-parser.add_argument('--diff_qp', type=int, default=None, help='quantization parameter for dNNs. Defaults to qp if unspecified (default: None)')
 parser.add_argument('--qp_density', type=int, default=2, help='quantization scale parameter (default: 2)')
 parser.add_argument('--nonweight_qp', type=int, default=-75, help='qp for non-weights, e.g. BatchNorm params (default: -75)')
 parser.add_argument("--opt_qp", action="store_true", help='Modifies QP layer-wise')
@@ -143,10 +142,7 @@ def main():
     if torch.cuda.is_available() and args.cuda_device is not None:
         os.environ["CUDA_VISIBLE_DEVICES"] = str(args.cuda_device)
 
-    if args.diff_qp == None:
-        args.diff_qp = args.qp
-
-    if clear_results and os.path.exists(os.path.join(args.results)):#, f'd{args.model}_epoch0_qp_{args.diff_qp}_bitstream.nnc')):
+    if clear_results and os.path.exists(os.path.join(args.results)):#, f'd{args.model}_epoch0_qp_{args.qp}_bitstream.nnc')):
         shutil.rmtree(f"{args.results}")
 
     if not os.path.exists(args.results):
