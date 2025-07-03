@@ -121,8 +121,8 @@ class ScaledConv2d(nn.Conv2d):
             super().reset_parameters()
 
     def forward(self, input):
-        torch_version_str = str(torch.__version__).split('.')
-        if int(torch_version_str[0]) >= 1 and int(torch_version_str[1]) > 7:
+        major, minor, _ = map(int, torch.__version__.split("."))
+        if major > 1 or (major == 1 and minor > 7):
             return self._conv_forward(input, self.weight_scaling * self.weight, self.bias)
         else:
             return self._conv_forward(input, self.weight_scaling * self.weight)

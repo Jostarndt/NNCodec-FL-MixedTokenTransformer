@@ -84,7 +84,7 @@ import shutil
 import sys
 import torchvision
 import wandb
-import warnings
+import warnings, logging
 import flwr as fl
 from flwr.common import Context
 
@@ -142,6 +142,7 @@ parser.add_argument('--cuda_device', type=int, default=None)
 def main():
     args = parser.parse_args()
     warnings.filterwarnings("ignore")
+    logging.getLogger("flwr").setLevel(logging.CRITICAL)
 
     clear_results = True
 

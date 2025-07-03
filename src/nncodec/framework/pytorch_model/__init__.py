@@ -703,13 +703,13 @@ class ImageClassificationPytorchModelExecuter(nnc_core.nnr_model.ModelExecute):
         self.tuning_optimizer = torch.optim.Adam(tuning_params, lr=self.learning_rate)
 
         perf = self.eval_model(parameters, verbose=verbose)
-        best_loss, best_params = perf[2], copy.deepcopy(parameters)
+        best_loss, best_params = perf['mean_test_loss'], copy.deepcopy(parameters)
         if verbose:
-            print(f'Validation accuracy (loss) before LSA and/or Fine Tuning: {perf[0]} ({perf[2]})')
+            print(f'Validation accuracy (loss) before LSA and/or Fine Tuning: {perf["acc"]} ({perf["mean_test_loss"]})')
             print(f'Test performance (top1, top5, loss) before LSA and/or Fine Tuning: '
                   f'{self.test_model(parameters, verbose=verbose)}')
         for e in range(self.epochs):
-            train_acc, loss = self.handle.train(
+            train_perf = self.handle.train(
                 self.model,
                 self.tuning_optimizer,
                 self.handle.criterion,
@@ -719,24 +719,24 @@ class ImageClassificationPytorchModelExecuter(nnc_core.nnr_model.ModelExecute):
                 freeze_batch_norm=True if lsa_flag and not ft_flag else False,
                 max_batches=self.max_batches if self.max_batches else None
             )
-            print(f'Epoch {e+1}: Train accuracy: {train_acc}, Loss: {loss}')
+            print(f'Epoch {e+1}: Train accuracy: {train_perf["acc"]}, Loss: {train_perf["mean_train_loss"]}')
             for param in parameters:
                 parameters[param] = copy.deepcopy(self.model.state_dict()[param])
             perf = self.eval_model(parameters, verbose=verbose)
-            if perf[2] < best_loss and best_loss - perf[2] > 1e-3:
-                best_loss = perf[2]
+            if perf["mean_test_loss"] < best_loss and best_loss - perf["mean_test_loss"] > 1e-3:
+                best_loss = perf["mean_test_loss"]
                 best_params = copy.deepcopy(parameters)
             else:
                 if verbose:
                     # print(f'Early Stopping due to model convergence or overfitting')
-                    print(f'Epoch {e + 1}: Validation accuracy (loss) after Model Tuning: {perf[0]} ({perf[2]})')
+                    print(f'Epoch {e + 1}: Validation accuracy (loss) after Model Tuning: {perf["acc"]} ({perf["mean_test_loss"]})')
                 # break
             if verbose:
                 if lsa_flag and not ft_flag:
-                    print(f'Epoch {e+1}: Validation accuracy (loss) after Model Tuning: {perf[0]} ({perf[2]})')
+                    print(f'Epoch {e+1}: Validation accuracy (loss) after Model Tuning: {perf["acc"]} ({perf["mean_test_loss"]})')
 
             if wandb_logging:
-                wandb.log({"LSA_val_acc": perf[0], "LSA_val_loss": perf[2], "LSA_train_acc": train_acc, "LSA_train_loss": loss})
+                wandb.log({"LSA_val_acc": perf["acc"], "LSA_val_loss": perf["mean_test_loss"], "LSA_train_acc": train_perf["acc"], "LSA_train_loss": train_perf["mean_train_loss"]})
         if verbose or wandb_logging:
             test_perf = self.test_model(parameters, verbose=verbose)
             print(f'Test performance (top1, top5, loss) after LSA and/or Fine Tuning: {test_perf}')
@@ -749,7 +749,7 @@ class ImageClassificationPytorchModelExecuter(nnc_core.nnr_model.ModelExecute):
                 ft_params[name] = best_params[name].cpu().numpy()
 
         if wandb_logging:
-            wandb.log({"LSA_test_acc": test_perf[0], "LSA_test_loss": test_perf[2]})
+            wandb.log({"LSA_test_acc": test_perf["acc"], "LSA_test_loss": test_perf["mean_test_loss"]})
             wandb.log({"lsa_params": lsa_params})
 
         return (lsa_params, ft_params)

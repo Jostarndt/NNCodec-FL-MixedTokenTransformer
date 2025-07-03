@@ -280,10 +280,10 @@ def compress_model( model_path_or_object,
                             int_quant_bw = int_quant_bw,
                             )
 
-    if bnf: #ADDED for ICML
-        block_id_and_param_type["bnf_matching"], bitstream = bitstream[1], bitstream[0]
+    # if bnf: #ADDED for ICML
+    #     block_id_and_param_type["bnf_matching"], bitstream = bitstream[1], bitstream[0]
 
-    if return_model_data==True or (bnf and is_pyt_model):
+    if return_model_data==True:# or (bnf and is_pyt_model):
         if return_bitstream:
             return bitstream, block_id_and_param_type
         else:

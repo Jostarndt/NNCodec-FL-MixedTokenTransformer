@@ -85,8 +85,8 @@ def encode(tensor, args=None, approx_param_base=None, quantize_only=False):
     elif isinstance(tensor, np.ndarray):
         nnc_tensor = {f'{args["tensor_id"]}': np.int32(tensor) if tensor.dtype in type_list_int else np.float32(tensor)}
 
-    print(f"Tensor inherent sparsity: {get_sparsity(nnc_tensor) * 100:.2f}%")
     if args["sparsity"] > 0:
+        print(f"Tensor inherent sparsity: {get_sparsity(nnc_tensor) * 100:.2f}%")
         sparse_params = apply_unstruct_spars_v2(args["qp"], nnc_tensor, target_sparsity=args["sparsity"])
         nnc_tensor = apply_struct_spars_v2(sparse_params, gain=args["struct_spars_factor"]) if args["struct_spars_factor"] > 0 else sparse_params
         print(f"Sparsity after sparsification: {get_sparsity(nnc_tensor) * 100:.2f}%")

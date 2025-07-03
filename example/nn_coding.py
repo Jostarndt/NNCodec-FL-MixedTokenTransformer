@@ -83,6 +83,7 @@ import shutil
 import wandb
 from ptflops import get_model_complexity_info
 import torchvision
+import warnings
 
 from nncodec.nn import encode, decode
 from nncodec.framework.use_case_init import use_cases
@@ -109,7 +110,7 @@ parser.add_argument('--tca', action='store_true', help='Enable Temporal Context 
 parser.add_argument('--batch_size', type=int, default=32, help='Batch size for training (default=64)')
 parser.add_argument('--epochs', type=int, default=10, help='Number of epochs to train (default: 10)')
 parser.add_argument('--max_batches', type=int, default=None, help='Max num of batches to process (default: 0, i.e., all)')
-parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate (default: 1e-3)')
+parser.add_argument('--lr', type=float, default=3e-4, help='Learning rate (default: 1e-3)')
 parser.add_argument('--model', type=str, default=None, metavar=f'any of {models.__all__} or {torchvision.models.list_models(torchvision.models)}')
 parser.add_argument('--model_path', type=str, default=None, metavar='./example/ResNet56_CIF100.pt')
 parser.add_argument('--model_rand_int', action="store_true", help='model randomly initialized, i.e., w/o loading pre-trained weights')
@@ -127,6 +128,7 @@ parser.add_argument('--cuda_device', type=int, default=0)
 
 
 def main():
+    warnings.filterwarnings("ignore", category=UserWarning)
     args = parser.parse_args()
 
     if torch.backends.mps.is_available():
@@ -182,9 +184,10 @@ def main():
                                                                                             dataset_path=args.dataset_path,
                                                                                             batch_size=args.batch_size,
                                                                                             num_workers=args.workers)
-        test_perf = evaluate_classification_model(model, criterion, test_loader, test_set, device=device,
-                                                  verbose=args.verbose, max_batches=args.max_batches)
-        print(f"Initial test performance: {[str(k) + ': ' + str(v) for k, v in test_perf.items()]}")
+        if not args.model_rand_int:
+            test_perf = evaluate_classification_model(model, criterion, test_loader, test_set, device=device,
+                                                      verbose=args.verbose, max_batches=args.max_batches)
+            print(f"Initial test performance: {[str(k) + ': ' + str(v) for k, v in test_perf.items()]}")
 
     if args.print_comp_complexity:
         for idx, (i, l) in enumerate(test_loader):
@@ -211,7 +214,8 @@ def main():
                                                           verbose=args.verbose, return_model=True, max_batches=args.max_batches)
             print(f"Reconstructed train performance: {[str(k) + ': ' + str(v) for k, v in train_perf.items()]}")
 
-            test_perf = evaluate_classification_model(model, criterion, test_loader, test_set, device=device, verbose=args.verbose)
+            test_perf = evaluate_classification_model(model, criterion, test_loader, test_set, device=device, verbose=args.verbose,
+                                                      max_batches=args.max_batches)
             print(f"Reconstructed test performance: {[str(k) + ': ' + str(v) for k, v in test_perf.items()]}")
             if args.wandb:
                 wandb.log(test_perf)
@@ -262,7 +266,8 @@ def main():
             updated_mdl = copy.deepcopy(model)
             print(f"Train performance: {[str(k) + ': ' + str(v) for k, v in train_perf.items()]}")
 
-            test_perf_uc = evaluate_classification_model(updated_mdl, criterion, test_loader, test_set, device=device, verbose=args.verbose)
+            test_perf_uc = evaluate_classification_model(updated_mdl, criterion, test_loader, test_set, device=device,
+                                                         verbose=args.verbose, max_batches=args.max_batches)
             print(f"Uncompressed test performance: {[str(k) + ': ' + str(v) for k, v in test_perf_uc.items()]}")
 
             bitstream = encode(model, vars(args), use_case_name, epoch=e, approx_param_base=approx_param_base)
@@ -303,7 +308,8 @@ def main():
                                                           verbose=args.verbose, return_model=True, max_batches=args.max_batches)
             updated_mdl = copy.deepcopy(model)
             print(f"Train performance: {[str(k) + ': ' + str(v) for k, v in train_perf.items()]}")
-            test_perf_uc = evaluate_classification_model(updated_mdl, criterion, test_loader, test_set, device=device, verbose=args.verbose)
+            test_perf_uc = evaluate_classification_model(updated_mdl, criterion, test_loader, test_set, device=device,
+                                                         verbose=args.verbose, max_batches=args.max_batches)
             print(f"Uncompressed test performance: {[str(k) + ': ' + str(v) for k, v in test_perf_uc.items()]}")
 
             if e == 0:

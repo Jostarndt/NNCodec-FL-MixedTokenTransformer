@@ -589,7 +589,11 @@ class ApproxInfo():
                     if check_array_all_zero_or_scalar(approx_data["parameters"][x]):#".num_batches_tracked" in x or np.sum(approx_data["parameters"][x]) == 0:
                         self.approx_info["qp"][x] = np.int32(0)
                     else:
-                        bw = int_quant_bw if int_quant_bw > 7 or model_info["parameter_type"][x] in W_TYPES else 8 # non-weight params at least in 8bit
+                        if int_quant_bw > 7 or model_info["parameter_type"][x] in W_TYPES:
+                            bw = int_quant_bw
+                        else: # non-weight params at least in 16bit
+                            bw = 8
+                            print(f"INFO: Since {x} seems to be no weight tensor, it was quantized to {bw} bit instead of {int_quant_bw} bit.")
                         self.approx_info["qp"][x] = self._get_intaligned_qp(param=approx_data["parameters"][x],
                                                                             qp_density=qp_density,
                                                                             bw=bw,

@@ -81,7 +81,11 @@ def approx(approx_info, model_info, approx_data_in, enc_info=None):
 
                 if "integer_aligned_bitdepth" in approx_info and ".num_batches_tracked" not in param:
                     bw_ap = approx_info["integer_aligned_bitdepth"]
-                    bw = bw_ap if bw_ap > 7 or model_info["parameter_type"][param] in W_TYPES else 8 # non-weight params at least in 8bit
+                    if bw_ap > 7 or model_info["parameter_type"][param] in W_TYPES:
+                        bw = bw_ap
+                    else: # non-weight params at least in 16bit
+                        bw = 8
+                        print(f"INFO: Since {param} seems to be no weight tensor, it was quantized to {bw} bit instead of {bw_ap} bit.")
                     prm = approx_data_in["parameters"][param]
                     if approx_info["unsigned_integer_support"] and len(prm[prm < 0]) == 0:
                         approx_data_out['parameters'][param] = quantizedValues.clip(0, 2 ** bw - 1)

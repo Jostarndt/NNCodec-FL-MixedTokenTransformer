@@ -163,17 +163,17 @@ def V2X(args, test_only=False, shuffle=False):
         train_loaders, val_loaders = [], []
         for shard in train_shard_filenames:
             ds = PretokDatasetTelko(args.max_seq_len, shard)
-            dl = torch.utils.data.DataLoader(ds, batch_size=args.batch_size, pin_memory=True, num_workers=args.workers,
+            dl = torch.utils.data.DataLoader(ds, batch_size=args.batch_size, pin_memory=not torch.backends.mps.is_available(), num_workers=args.workers,
                                              worker_init_fn=seed_worker, generator=g)
             train_loaders.append(dl)
 
             dlt = torch.utils.data.DataLoader(PretokDatasetTelko(args.max_seq_len, test_shard_filename[0], split='test'),
-                                              batch_size=args.batch_size, pin_memory=True, num_workers=args.workers,
+                                              batch_size=args.batch_size, pin_memory=not torch.backends.mps.is_available(), num_workers=args.workers,
                                               worker_init_fn=seed_worker, generator=g)
             val_loaders.append(dlt)
 
         test_loader = torch.utils.data.DataLoader(PretokDatasetTelko(args.max_seq_len, test_shard_filename[0], split='test'),
-                                                  batch_size=args.batch_size, pin_memory=True, num_workers=args.workers,
+                                                  batch_size=args.batch_size, pin_memory=not torch.backends.mps.is_available(), num_workers=args.workers,
                                                   worker_init_fn=seed_worker, generator=g)
         return train_loaders, val_loaders, test_loader  ## Note: curently test loader and client val loaders are identical
 
@@ -183,6 +183,6 @@ def V2X(args, test_only=False, shuffle=False):
         test_shard_filename = sorted(glob.glob(os.path.join(os.path.join(args.dataset_path, 'test'), "*.bin")))
 
         test_loader = torch.utils.data.DataLoader(PretokDatasetTelkoTest(args.max_seq_len, test_shard_filename[0], split='test', shuffle=shuffle),
-                                                  batch_size=args.batch_size, pin_memory=True, num_workers=0,
+                                                  batch_size=args.batch_size, pin_memory= not torch.backends.mps.is_available(), num_workers=0,
                                                   worker_init_fn=seed_worker, generator=g)
         return test_loader

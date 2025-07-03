@@ -118,7 +118,12 @@ def check_array_all_zero_or_scalar(x):
 
 def clip_for_int_aligned(quantizedValues, approx_info, approx_data_in, model_info, param):
     bw_ap = approx_info["integer_aligned_bitdepth"]
-    bw = bw_ap if bw_ap > 7 or model_info["parameter_type"][param] in W_TYPES else 8  # non-weight params at least in 8bit
+    if bw_ap > 7 or model_info["parameter_type"][param] in W_TYPES:
+        bw = bw_ap
+    else:  # non-weight params at least in 16bit
+        bw = 8
+        print(f"INFO: Since {param} seems to be no weight tensor, it was quantized to {bw} bit instead of {bw_ap} bit.")
+
     prm = approx_data_in["parameters"][param]
     if approx_info["unsigned_integer_support"] and len(prm[prm < 0]) == 0:
         quantizedValues = quantizedValues.clip(0, 2 ** bw - 1)

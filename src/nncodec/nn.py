@@ -49,6 +49,7 @@ nncargs = {'approx_method': 'uniform',
             'nonweight_qp': -75,
             'opt_qp': False,
             'qp': -32,
+            'qp_density': 2,
             'quantize_only': False,
             'results': '.',
             'row_skipping': True,
@@ -160,20 +161,21 @@ def decode(bs, args=None, model=None, approx_param_base=None):
         args = {**nncargs, **args}
 
     update_base = approx_param_base is not None
-    rec_mdl_params = nnc.decompress(bs, approx_param_base=approx_param_base, update_base_param=update_base)
+    rec_mdl_params = nnc.decompress(bs, approx_param_base=approx_param_base, update_base_param=update_base,
+                                    reconstruct_lsa=args["lsa"], reconstruct_bnf=args["bnf"])
 
     ### reconstruction
-    if args and args["bnf"]: ##TODO (incremental) BNF
-        for n, m in model.named_modules():  # reset running statistics and trainable bn_gamma to 1
-            if isinstance(m, torch.nn.BatchNorm2d):
-                m.reset_running_stats()
-                m.weight = torch.nn.Parameter(torch.ones_like(m.weight))
-        # re-name bn_beta-type params to PYT bn.bias
-        # try:
-        #     rec_mdl_params = {enc_mdl_info["bnf_matching"][param] if param in enc_mdl_info["bnf_matching"]
-        #                   else param: rec_mdl_params[param] for param in rec_mdl_params}
-        # except:
-        #     rec_mdl_params = {bnf_matching[param] if param in bnf_matching
-        #                       else param: rec_mdl_params[param] for param in rec_mdl_params}
+    # if args and args["bnf"]: ##TODO (incremental) BNF
+    #     for n, m in model.named_modules():  # reset running statistics and trainable bn_gamma to 1
+    #         if isinstance(m, torch.nn.BatchNorm2d):
+    #             m.reset_running_stats()
+    #             m.weight = torch.nn.Parameter(torch.ones_like(m.weight))
+    #     re-name bn_beta-type params to PYT bn.bias
+    #     try:
+    #         rec_mdl_params = {enc_mdl_info["bnf_matching"][param] if param in enc_mdl_info["bnf_matching"]
+    #                       else param: rec_mdl_params[param] for param in rec_mdl_params}
+    #     except:
+    #         rec_mdl_params = {bnf_matching[param] if param in bnf_matching
+    #                           else param: rec_mdl_params[param] for param in rec_mdl_params}
 
     return rec_mdl_params
