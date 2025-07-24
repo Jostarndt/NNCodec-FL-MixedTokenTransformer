@@ -100,6 +100,45 @@ class PretokDatasetTelko(torch.utils.data.Dataset):
         y = chunk[1:]
         return x, y
 
+class PretokDatasetTelkoMTT(torch.utils.data.Dataset):
+    """Loads pretokenized examples from disk and yields them as PyTorch tensors."""
+
+    def __init__(self, max_seq_len, bin_path, split='train', shuffle=False):
+        super().__init__()
+        self.max_seq_len = max_seq_len
+        self.bin_path = bin_path
+        self.split = split
+        self.shuffle = shuffle
+
+        # Load the data once
+        with np.load(self.bin_path) as m:
+            self.sequences = [m[key] for key in sorted(m.files, key=lambda x: int(x.replace('arr_', '')))]
+
+        self.num_samples = len(self.sequences)
+
+        # Optional shuffling for training
+        if self.shuffle:
+            np.random.seed(42)  # or pass a seed argument
+            np.random.shuffle(self.sequences)
+
+    def __len__(self):
+        return self.num_samples
+
+    def __getitem__(self, idx):
+        seq = self.sequences[idx]
+
+        # Pad or truncate
+        if len(seq) >= self.max_seq_len:
+            padded = seq[:self.max_seq_len]
+        else:
+            pad_len = self.max_seq_len - len(seq)
+            padding = np.zeros((pad_len, 2), dtype=seq.dtype)
+            padded = np.vstack((seq, padding))
+
+        chunk = torch.from_numpy(padded.astype(np.float32))
+        x = chunk[:-1, :]
+        y = chunk[1:, :]
+        return x, y
 
 class PretokDatasetTelkoTest(torch.utils.data.Dataset):
     """Loads pretokenized examples from a .npz file and returns them as PyTorch tensors."""
@@ -145,15 +184,54 @@ class PretokDatasetTelkoTest(torch.utils.data.Dataset):
         chunk = torch.from_numpy(padded.astype(np.int32))
         return chunk
 
+class PretokDatasetTelkoTestMTT(torch.utils.data.Dataset):
+    """Loads pretokenized examples from a .npz file and returns them as PyTorch tensors."""
 
-def V2X(args, test_only=False, shuffle=False):
+    def __init__(self, max_seq_len, bin_path, split='train', shuffle=False):
+        super().__init__()
+        self.max_seq_len = max_seq_len
+        self.bin_path = bin_path
+        self.split = split
+        self.shuffle = shuffle
+
+        # Load the data once
+        with np.load(self.bin_path) as m:
+            self.sequences = [m[key] for key in sorted(m.files, key=lambda x: int(x.replace('arr_', '')))]
+
+        self.num_samples = len(self.sequences)
+
+        # Optional shuffling for training
+        if self.shuffle:
+            np.random.seed(42)  # or pass a seed argument
+            np.random.shuffle(self.sequences)
+
+    def __len__(self):
+        return self.num_samples
+
+    def __getitem__(self, idx):
+        seq = self.sequences[idx]
+
+        print(idx)
+
+        # Pad or truncate
+        if len(seq) >= self.max_seq_len:
+            padded = seq[:self.max_seq_len]
+        else:
+            pad_len = self.max_seq_len - len(seq)
+            padding = np.zeros((pad_len, 2), dtype=seq.dtype)
+            padded = np.vstack((seq, padding))
+
+        chunk = torch.from_numpy(padded.astype(np.float32))
+        return chunk
+
+def V2X(args, test_only=False, shuffle=False, mtt=False):
 
     if not test_only:
 
         print(f'searching: {os.path.join(args.dataset_path, "train")} and {os.path.join(args.dataset_path, "test")}')
-        train_shard_filenames = sorted(glob.glob(os.path.join(os.path.join(args.dataset_path, 'train'), "*.bin")))
+        train_shard_filenames = sorted(glob.glob(os.path.join(os.path.join(args.dataset_path, 'train'), f"{'*.npz' if mtt else '*.bin'}")))
 
-        test_shard_filename = sorted(glob.glob(os.path.join(os.path.join(args.dataset_path, 'test'), "*.bin")))
+        test_shard_filename = sorted(glob.glob(os.path.join(os.path.join(args.dataset_path, 'test'), f"{'*.npz' if mtt else '*.bin'}")))
 
         if not len(train_shard_filenames) == args.num_clients:
             print(f"train_shard_filenames: {train_shard_filenames}")
@@ -162,27 +240,47 @@ def V2X(args, test_only=False, shuffle=False):
 
         train_loaders, val_loaders = [], []
         for shard in train_shard_filenames:
-            ds = PretokDatasetTelko(args.max_seq_len, shard)
+            # Train Loaders
+            if mtt:
+                ds = PretokDatasetTelkoMTT(args.max_seq_len, shard)
+            else:
+                ds = PretokDatasetTelko(args.max_seq_len, shard)
             dl = torch.utils.data.DataLoader(ds, batch_size=args.batch_size, pin_memory=not torch.backends.mps.is_available(), num_workers=args.workers,
                                              worker_init_fn=seed_worker, generator=g)
             train_loaders.append(dl)
 
-            dlt = torch.utils.data.DataLoader(PretokDatasetTelko(args.max_seq_len, test_shard_filename[0], split='test'),
-                                              batch_size=args.batch_size, pin_memory=not torch.backends.mps.is_available(), num_workers=args.workers,
-                                              worker_init_fn=seed_worker, generator=g)
-            val_loaders.append(dlt)
+            # Validation loaders
+            if mtt:
+                dsv = PretokDatasetTelkoMTT(args.max_seq_len, test_shard_filename[0], split='test')
+            else:
+                dsv = PretokDatasetTelko(args.max_seq_len, test_shard_filename[0], split='test')
 
-        test_loader = torch.utils.data.DataLoader(PretokDatasetTelko(args.max_seq_len, test_shard_filename[0], split='test'),
-                                                  batch_size=args.batch_size, pin_memory=not torch.backends.mps.is_available(), num_workers=args.workers,
+            dlv = torch.utils.data.DataLoader(dsv, batch_size=args.batch_size, pin_memory=not torch.backends.mps.is_available(),
+                                              num_workers=args.workers, worker_init_fn=seed_worker, generator=g)
+            val_loaders.append(dlv)
+
+        # Test Loaders
+        if mtt:
+            dst = PretokDatasetTelkoMTT(args.max_seq_len, test_shard_filename[0], split='test')
+        else:
+            dst = PretokDatasetTelko(args.max_seq_len, test_shard_filename[0], split='test')
+
+        test_loader = torch.utils.data.DataLoader(dst, batch_size=args.batch_size, pin_memory=not torch.backends.mps.is_available(), num_workers=args.workers,
                                                   worker_init_fn=seed_worker, generator=g)
+
         return train_loaders, val_loaders, test_loader  ## Note: curently test loader and client val loaders are identical
 
     else:
 
         print(f'searching: {os.path.join(args.dataset_path, "test")}')
-        test_shard_filename = sorted(glob.glob(os.path.join(os.path.join(args.dataset_path, 'test'), "*.bin")))
+        test_shard_filename = sorted(glob.glob(os.path.join(os.path.join(args.dataset_path, 'test'), f"{'*.npz' if mtt else '*.bin'}")))
 
-        test_loader = torch.utils.data.DataLoader(PretokDatasetTelkoTest(args.max_seq_len, test_shard_filename[0], split='test', shuffle=shuffle),
-                                                  batch_size=args.batch_size, pin_memory= not torch.backends.mps.is_available(), num_workers=0,
-                                                  worker_init_fn=seed_worker, generator=g)
+        if mtt:
+            dss = PretokDatasetTelkoMTT(args.max_seq_len, test_shard_filename[0], split='test', shuffle=shuffle)
+        else:
+            dss = PretokDatasetTelkoTest(args.max_seq_len, test_shard_filename[0], split='test', shuffle=shuffle)
+
+        test_loader = torch.utils.data.DataLoader(dss, batch_size=args.batch_size, pin_memory= not torch.backends.mps.is_available(),
+                                                  num_workers=0, worker_init_fn=seed_worker, generator=g)
+
         return test_loader

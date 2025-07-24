@@ -168,7 +168,8 @@ setup(
         "flwr[simulation]>=1.5",
         "hydra-core>=1.3.2",
         "sentencepiece>=0.1.99",
-        "numpy<2"
+        "numpy<2",
+        "gradnorm_pytorch"
     ],
     setup_requires=['pybind11>=2.6.2'],
     zip_safe=False,

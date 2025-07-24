@@ -141,6 +141,8 @@ class NNCFedAvg(fl.server.strategy.FedAvg):
             wandb.log(wandb_dict)
 
         mean_loss = torch.mean(torch.tensor(list(test_results_dict.values())))
+        if 'test_out_reg' in test_results_dict and test_results_dict['test_out_reg'] == 0:
+            mean_loss = test_results_dict['test_out_class']
         if mean_loss <= self.internal_states["best_loss"]:
            self.internal_states["best_loss"] = mean_loss
            print("save new best model")

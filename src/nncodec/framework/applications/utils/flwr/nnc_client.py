@@ -45,6 +45,7 @@ from collections import OrderedDict
 import flwr as fl
 from typing import Dict, Tuple
 from flwr.common import (Scalar, ndarrays_to_parameters)
+from gradnorm_pytorch import GradNormLossWeighter
 
 def model_diff(state_dict_a, state_dict_b): # new, old
     state_dict_diff = OrderedDict()
@@ -77,6 +78,10 @@ class NNClient(fl.client.NumPyClient):
             self.optimizer = c_model.configure_optimizers(args.weight_decay, args.lr, (0.9, 0.95), device.type)
         except:
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=args.lr)
+        if hasattr(self.model, 'norm'): # LR of GradNorm can be different to LR from optimizer!
+            self.grad_norm = GradNormLossWeighter(num_losses=3, learning_rate=args.lr, restoring_force_alpha=0, grad_norm_parameters=self.model.norm.weight)
+        else:
+            self.grad_norm = None
         self.accumulated_bs_sizes_per_round = 0
         self.id = id
         self.args = args
@@ -169,7 +174,8 @@ class NNClient(fl.client.NumPyClient):
 
         train_res_dict = self.train_fn(self.model, optimizer=self.optimizer, criterion=self.criterion,
                                                     trainloader=self.trainloader, device=self.device, verbose=False,
-                                                    args=self.args, round=self.internal_states["comm_round"])
+                                                    args=self.args, round=self.internal_states["comm_round"],
+                                                    grad_norm=self.grad_norm )
 
         if self.args.bnf:
             self.internal_states["local_bn_params"] = {n: v.detach().cpu().numpy() for n, v in

@@ -400,3 +400,308 @@ def evaluate_language_model(model, testloader, device='mps', max_batches=3, verb
     model.train()
     print(f'top1-acc: {acc:.3f}%, ppl: {ppl:.3f}, loss: {loss:.3f}')
     return {'top1_acc': acc, 'ppl': ppl, 'loss': loss}
+
+@torch.no_grad()
+def evaluate_mtt(model, testloader, device='mps', max_batches=3, verbose=False, criterion=None, detokenize=False, args=None):
+
+    if detokenize:
+        import textwrap
+        import json
+
+        # def is_number(s):
+        #     try:
+        #         float(s)  # float() can handle both integers and floats
+        #         return True
+        #     except ValueError:
+        #         return False
+
+        enc = Tokenizer(tokenizer_model=f"{args.tokenizer_path}")
+        vocab_size = enc.sp_model.get_piece_size()
+        vocabulary = [enc.sp_model.id_to_piece(i) for i in range(vocab_size)]
+
+        with open(f'{args.tokenizer_path.split("/")[-2]}/mean_dict.json', 'r') as json_file:
+            mean_dict = json.load(json_file)
+        with open(f'{args.tokenizer_path.split("/")[-2]}/std_dict.json', 'r') as json_file:
+            std_dict = json.load(json_file)
+
+        global_predictions, global_gt, global_mse, global_rel_diff = {}, {}, {}, {}
+
+    model = model.to(device)
+    # if detokenize:
+    #     class Iterator:
+    #         @staticmethod
+    #         def iter_batches(dataloader, device):
+    #             for x in dataloader:
+    #                 x = x.to(device, non_blocking=True)
+    #                 yield x
+    # else:
+    #     class Iterator:
+    #         @staticmethod
+    #         def iter_batches(dataloader, device):
+    #             for x, y in dataloader:
+    #                 x = x.to(device, non_blocking=True)
+    #                 y = y.to(device, non_blocking=True)
+    #                 yield x, y
+
+    exclude_strings = {'=', '-->', ''}
+
+    def denormalize(list_of_str_tokens):
+        i = 0
+        while i < len(list_of_str_tokens) - 1:
+            key = list_of_str_tokens[i].strip()
+            if key in mean_dict:
+                j = i + 1
+                while j < len(list_of_str_tokens) and list_of_str_tokens[j].strip() in exclude_strings:
+                    j += 1
+                if j < len(list_of_str_tokens):
+                    try:
+                        original_value = float(list_of_str_tokens[j].strip())
+                        updated_value = (original_value * std_dict[key]) + mean_dict[key]
+                        list_of_str_tokens[j] = f"{updated_value:.3f}"
+                    except ValueError:
+                        pass
+            i += 1
+
+    ptdtype = {"float32": torch.float32, "bfloat16": torch.bfloat16, "float16": torch.float16}["float16"]
+
+    ctx = (
+        nullcontext()
+        if device == "cpu"
+        else torch.amp.autocast(device_type=device.type, dtype=ptdtype)
+    )
+
+    # test_batch_iter = []
+    # batch_iter = Iterator.iter_batches(testloader, device)
+
+    if max_batches == None:
+        try:
+            max_batches = len(testloader)
+        except:
+            max_batches = testloader.dataset.num_samples
+
+    # for idx, x in enumerate(batch_iter):
+    #     if idx >= max_batches:
+    #         break
+    #     test_batch_iter.append(x)
+
+    model.eval()
+    test_loss = []
+    test_acc = []
+    test_mse = []
+
+    losses_class = torch.zeros(max_batches)
+    losses_reg = torch.zeros(max_batches)
+    losses_dec = torch.zeros(max_batches)
+
+    for k, batch in enumerate(testloader):
+
+        if k == max_batches:
+            break
+
+        if detokenize:
+            X, Y = batch, None
+        else:
+            X, Y = batch
+
+        X = X.to(device, non_blocking=True)
+        if Y is not None:
+            Y = Y.to(device, non_blocking=True)
+        with ctx:
+            logits, reg_out, gating_out, backbone_output = model(X, Y)
+            loss = model.class_loss
+            loss_reg = model.loss_reg
+            loss_dec = model.decision_loss
+
+        if not detokenize:
+            losses_class[k] = loss.item()
+            losses_reg[k] = loss_reg.item()
+            losses_dec[k] = loss_dec.item()
+            test_loss.append(loss.item())
+
+            cond_mask = Y[:, :, 0]
+            mask_class = (cond_mask == 0)
+            mask_reg = (cond_mask == 1)
+
+            gt_words = Y[:, :, 1][mask_class]
+            gt_num = Y[:, :, 1][mask_reg]
+            word_predictions = torch.argmax(logits, dim=-1)[mask_class]  # Shape: (batch_size, seq_length)
+            correct = (word_predictions == gt_words).float()
+            test_acc.append(correct.mean().item() * 100)
+
+            torch.set_printoptions(sci_mode=False)
+            diff = (gt_num - reg_out[:,:,0][mask_reg])
+            mse = torch.mean(diff ** 2).item()
+            test_mse.append(mse)
+
+        if detokenize:
+            text_width = 150
+
+            exclude_strings = {'=', '-->', ''}
+
+            def merge_consecutive_digits(token_list):  ## merging consecutiive digits to one number
+                merged_digits = []
+                i = 0
+                while i < len(token_list):
+                    if token_list[i] in {'', '='}:
+                        merged_digits.append(token_list[i])
+                        i += 1
+                    elif re.match(r'^-?\d*\.?\d*$', token_list[i]) and token_list[i] != '':
+                        num = token_list[i]
+                        i += 1
+                        while i < len(token_list) and re.match(r'^\d*\.?\d*$', token_list[i]) and token_list[i] != '':
+                            num += token_list[i]
+                            i += 1
+                        merged_digits.append(num)
+                    else:
+                        merged_digits.append(token_list[i])
+                        i += 1
+                return merged_digits
+
+            # for batch_elemet in range(X.shape[0]):
+            inp_token = X[0,:,:]
+            numbers = (inp_token[inp_token[:, 0] == 1][:, 1])
+            number_iterator = iter(numbers)
+
+            wrapped_text = [" " + str(next(number_iterator).item()) + " " if inp_token[i, 0] == 1 else enc.decode(
+                            inp_token[i, 1].int().tolist()) for i in range(inp_token.shape[0])]
+
+            # print(f"Input:\n{textwrap.fill(' '.join(wrapped_text), width=text_width)} \n")
+
+            arrow_indices = [i for i, s in enumerate(wrapped_text) if s == "-->"]
+
+            input_sample = wrapped_text[:arrow_indices[-1] + 1]
+            if numbers.numel() != 0:
+                denormalize(input_sample)
+            else:
+                input_sample = merge_consecutive_digits(input_sample)
+            print(f"Input:\n{textwrap.fill(' '.join(input_sample), width=text_width)} \n")
+
+            output_sample = wrapped_text[arrow_indices[-1]:]
+            model_input = inp_token[:arrow_indices[-1] + 1,:].unsqueeze(0)
+            concat_results = []
+            current_line_length = 0
+            print(f"Predicting [...]\n")
+
+            for i in range(max(args.max_seq_len, len(output_sample) + 1)):
+                if model_input.shape[1] > args.max_seq_len:
+                    break
+                logits, reg_out, gating_out, backbone_output = model(model_input)
+
+                # number_condition = (len(concat_results) > 2 and concat_results[-1] == "=" and concat_results[-2] in mean_dict)
+                # fill_in_the_gap_condition = number_condition and len(output_sample) > output_sample.index(concat_results[-2]) + 4 and not(is_number(output_sample[output_sample.index(concat_results[-2]) + 4]))
+                if numbers.numel() == 0 or not gating_out:#not number_condition and not fill_in_the_gap_condition:
+                    arg_max = torch.argmax(logits.squeeze(0), dim=1).item()
+                    char = vocabulary[arg_max]
+
+                    if char == 'time':
+                        break
+                    elif char == "<unk>":
+                        break
+                    elif char != '▁':
+                        concat_results.append(char)
+                        print(char, end='', flush=True)
+                        current_line_length += len(char)
+                    else:
+                        print(" ", end='', flush=True)
+                        current_line_length += 1
+
+                    model_input = torch.cat((model_input, torch.tensor([[[0.0, arg_max]]], device=device)), dim=1)
+
+                else:
+                    filtered_res = [s for s in concat_results if s not in exclude_strings]
+                    if filtered_res[-1] in std_dict and filtered_res[-1] in mean_dict:
+                        reg_out_denorm = (reg_out * std_dict[filtered_res[-1]]) + mean_dict[filtered_res[-1]]
+
+                    reg_out_str = f"{reg_out_denorm.item():.3f}" #if not fill_in_the_gap_condition else f"[{reg_out_denorm.item():.3f}]"
+
+                    print(reg_out_str, end='', flush=True)
+                    concat_results.append(reg_out_str)
+                    current_line_length += len(reg_out_str)
+
+                    model_input = torch.cat((model_input, torch.tensor([[[1.0, reg_out[0, 0, 0]]]], device=device)), dim=1)
+
+                if current_line_length >= text_width:
+                    print()
+                    current_line_length = 0
+
+            print("\n")
+            print(f"Ground Truth:\n")
+            if numbers.numel() != 0:
+                denormalize(output_sample)
+            else:
+
+                output_sample = merge_consecutive_digits(output_sample)
+                concat_results = merge_consecutive_digits(concat_results)
+            print(f"{textwrap.fill(' '.join(output_sample), width=text_width)} \n")
+
+            def extract_values(string_list):
+                values, i = {}, 0
+                while i < len(string_list) - 1:
+                    key = string_list[i].strip()
+                    if key not in exclude_strings:
+                        j = i + 1
+                        while j < len(string_list) and string_list[j].strip() in exclude_strings:
+                            j += 1
+                        if j < len(string_list):
+                            try:
+                                value = float(string_list[j].strip())
+                                values[key] = value
+                            except ValueError:
+                                pass
+                    i += 1
+                return values
+
+
+            predicted_values = extract_values(concat_results)
+            ground_truth_values = extract_values(output_sample)
+
+            rel_differences, diff = {}, {}
+            for key in predicted_values:
+                if key in ground_truth_values:
+                    diff[key] = predicted_values[key] - ground_truth_values[key]
+                    if key in global_predictions:
+                        global_predictions[key] += [predicted_values[key]]
+                    else:
+                        global_predictions[key] = [predicted_values[key]]
+                    if key in global_gt:
+                        global_gt[key] += [ground_truth_values[key]]
+                    else:
+                        global_gt[key] = [ground_truth_values[key]]
+
+            for key in diff:
+                rel_differences[key] = (diff[key] / (ground_truth_values[key] + 1e-10) ) * 100
+                if key in global_rel_diff:
+                    global_rel_diff[key] += [rel_differences[key]]
+                else:
+                    global_rel_diff[key] = [rel_differences[key]]
+
+            print("---------------------------------------------------------------------------------------\n")
+            print(f"Relative differences wrt. ground truth: ")
+            [print(f"{rel_diff}: {rel_differences[rel_diff]:.1f}%") for rel_diff in rel_differences]
+            print("---------------------------------------------------------------------------------------\n")
+            print(f"Running absolute mean relative differences wrt. ground truth (global):")
+            [print(f"{grel_diff}: {np.mean(np.abs(np.array(global_rel_diff[grel_diff]))):.1f}%") for grel_diff in global_rel_diff]
+            print("---------------------------------------------------------------------------------------\n")
+
+
+
+            with open(f'{args.results}/test_predictions.json', 'w') as f:
+                json.dump(global_predictions, f)
+            with open(f'{args.results}/test_ground_truth.json', 'w') as f:
+                json.dump(global_gt, f)
+            with open(f'{args.results}/test_rel_differences.json', 'w') as f:
+                json.dump(global_rel_diff, f)
+
+
+    out_class = losses_class.mean()
+    out_reg = losses_reg.mean()
+    out_dec = losses_dec.mean()
+
+    loss = torch.mean(torch.tensor(test_loss)).item()
+    acc = torch.mean(torch.tensor(test_acc)).item()
+    ppl = torch.exp(out_class).item()
+    mse = torch.mean(torch.tensor(test_mse)).item()
+    model.train()
+    # return acc, ppl, loss.item()
+    print(f'top1-acc (words): {acc:.3f}%, ppl: {ppl:.3f}, mse (numbers): {mse:.3f}')
+    return {'test_out_class': out_class, 'test_out_reg': out_reg, 'test_out_dec': out_dec}

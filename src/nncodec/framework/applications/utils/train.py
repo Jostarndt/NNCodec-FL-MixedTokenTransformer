@@ -165,7 +165,7 @@ def train_classification_model(model, optimizer=None, criterion=None, trainloade
 
 
 def train_language_model(model, optimizer=None, criterion=None, trainloader=None, device=None, verbose=False, args=None,
-                         round=0):
+                         round=0, grad_norm=None):
 
     torch.manual_seed(808 + round)
     np.random.seed(303 + round)
@@ -265,3 +265,110 @@ def train_language_model(model, optimizer=None, criterion=None, trainloader=None
 
 
     return {'mean_train_acc': np.mean(train_acc), 'mean_train_loss': np.mean(train_loss)}
+
+
+def train_mtt(model, optimizer=None, criterion=None, trainloader=None, device=None, verbose=False, args=None,
+                         round=0, grad_norm=None):
+
+    torch.manual_seed(808 + round)
+    np.random.seed(303 + round)
+    random.seed(909 + round)
+
+    try:
+        len_trainloader = len(trainloader)
+    except TypeError:
+        len_trainloader = trainloader.dataset.num_samples
+
+    if args is not None and args.max_batches is None:
+        max_batches = len_trainloader
+    else:
+        max_batches = args.max_batches if args is not None else int(1e6)
+
+    model.to(device)
+    model.train()
+
+    class Iterator:
+        @staticmethod
+        def iter_batches(dataloader, device):
+            for x, y in dataloader:
+                x = x.to(device)
+                y = y.to(device)
+                yield x, y
+
+    train_batches = []
+    batch_iter = Iterator.iter_batches(trainloader, device)
+    for idx, (x, y) in enumerate(batch_iter):
+        if idx >= max_batches:
+            break
+        train_batches.append((x, y))
+
+    print(f"[INFO] Loaded {len(train_batches)} batches for round {round}")
+
+    iter_num = round * len(train_batches)
+    log_interval = 100
+    decay_lr = True
+    warmup_iters = 1000
+    lr_decay_iters = args.epochs * max_batches if args is not None else 10000
+    min_lr = 0.0
+    grad_clip = 1.0
+
+    # Learning rate scheduler
+    def get_lr(it):
+        if it < warmup_iters:
+            return args.lr * it / warmup_iters
+        if it > lr_decay_iters:
+            return min_lr
+        decay_ratio = (it - warmup_iters) / (lr_decay_iters - warmup_iters)
+        coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))
+        return min_lr + coeff * (args.lr - min_lr)
+
+    losses_class, losses_reg, losses_dec = [], [], []
+    t0 = time.time()
+    ctx = nullcontext()
+
+    for X, Y in train_batches:
+        with ctx:
+            lr = get_lr(iter_num) if decay_lr else args.lr
+            for param_group in optimizer.param_groups:
+                param_group["lr"] = lr
+
+            logits, reg_out, gating_out, backbone_output = model(X, Y)
+            loss = model.class_loss
+            loss_reg = model.loss_reg
+            loss_dec = model.decision_loss
+
+            losses_class.append(loss.item())
+            losses_reg.append(loss_reg.item())
+            losses_dec.append(loss_dec.item())
+
+
+            if loss_reg:
+                combined_losses = [loss, loss_reg, loss_dec]
+            else:
+                combined_losses = [loss, loss_reg.to(device), loss_dec.to(device)]
+            grad_norm.backward(combined_losses, retain_graph=True)
+            grad_norm.backward(combined_losses, backbone_output)
+
+            # weighted_loss = 1.0 * loss + 1.0 * loss_reg + 1.0 * loss_dec  # you can adjust the weights manually
+            # weighted_loss.backward()
+
+            if grad_clip != 0.0:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+
+            optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
+
+        if iter_num % log_interval == 0:
+            dt = time.time() - t0
+            print(f"[Round {round}] {iter_num} | loss_reg {loss_reg.item():.4f} | "
+                  f"loss_cls {loss.item():.4f} | loss_dec {loss_dec.item():.4f} | "
+                  f"lr {lr:.6f} | {dt * 1000:.2f}ms")
+            t0 = time.time()
+
+        iter_num += 1
+
+    out_class = np.mean(losses_class)
+    out_reg = np.mean(losses_reg)
+    out_dec = np.mean(losses_dec)
+
+    return {'out_class': out_class, 'out_reg': out_reg, 'out_dec': out_dec}

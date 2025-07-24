@@ -210,11 +210,18 @@ class ModelSetting:
 use_cases = {
 
     "NNR_PYT_Telko": ModelSetting(None,
-                                evaluation.evaluate_language_model,
-                                train.train_language_model,
-                                V2X,
-                                None,
-                                ),
+                                  evaluation.evaluate_language_model,
+                                  train.train_language_model,
+                                  V2X,
+                                  None,
+                                  ),
+
+    "NNR_PYT_TelkoMTT": ModelSetting(None,
+                                     evaluation.evaluate_mtt,
+                                     train.train_mtt,
+                                     V2X,
+                                     None,
+                                     ),
 
     "NNR_PYT_VOC": ModelSetting(None,  # transforms.model_transform_ImageNet_to_CIFAR100,
                                 evaluation.evaluate_classification_model,

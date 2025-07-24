@@ -166,7 +166,7 @@ def main():
             assert 0, "incompatible W&B authentication key"
 
     if args.model in models.__all__:
-        if "tinyllama" in args.model:
+        if "tinyllama" in args.model or "mtt" in args.model:
             model, tokenizer = models.init_model(args.model, parser_args=args)
         else:
             model = models.init_model(args.model, num_classes=100)
@@ -198,7 +198,7 @@ def main():
         )
 
     UCS = {'cifar100': 'NNR_PYT_CIF100', 'cifar10': 'NNR_PYT_CIF10', 'imagenet200': 'NNR_PYT_IN200',
-           'voc': 'NNR_PYT_VOC', 'V2X': 'NNR_PYT_Telko'}
+           'voc': 'NNR_PYT_VOC', 'V2X': f'{"NNR_PYT_TelkoMTT" if "mtt" in args.model else "NNR_PYT_Telko"}'}
     use_case_name = UCS[args.dataset] if args.dataset in UCS else 'NNR_PYT'
 
     nnc_mdl, nnc_mdl_executer, mdl_params = pytorch_model.create_NNC_model_instance_from_object(
@@ -230,7 +230,7 @@ def main():
                                                               val_ratio=0.0, #if > 0 creates validation split at each client
                                                               )
     else:
-        trainloaders, valloaders, testloader = datasets.V2X(args)
+        trainloaders, valloaders, testloader = datasets.V2X(args, mtt=True if "mtt" in args.model else False)
 
     # function for global evaluation on the server
     def get_evaluate_fn(s_model, testloader_server):
