@@ -276,7 +276,7 @@ def V2X(args, test_only=False, shuffle=False, mtt=False):
         test_shard_filename = sorted(glob.glob(os.path.join(os.path.join(args.dataset_path, 'test'), f"{'*.npz' if mtt else '*.bin'}")))
 
         if mtt:
-            dss = PretokDatasetTelkoMTT(args.max_seq_len, test_shard_filename[0], split='test', shuffle=shuffle)
+            dss = PretokDatasetTelkoTestMTT(args.max_seq_len, test_shard_filename[0], split='test', shuffle=shuffle)
         else:
             dss = PretokDatasetTelkoTest(args.max_seq_len, test_shard_filename[0], split='test', shuffle=shuffle)
 

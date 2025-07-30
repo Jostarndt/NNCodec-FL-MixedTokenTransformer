@@ -117,7 +117,7 @@ parser.add_argument('--dataset_path', type=str, default='../data')
 parser.add_argument('--tokenizer_path', type=str, default='./tokenizer/telko_tokenizer.model')
 parser.add_argument('--max_seq_len', type=int, default=1525, help='Custom max_seq_len for tiny Llama')
 parser.add_argument('--TLM_size', type=int, default=0, help='tiny Llama size [0, 1, 2, 3]')
-parser.add_argument('--results', type=str, default='./results')
+parser.add_argument('--results', type=str, default='./results_eval')
 parser.add_argument('--workers', type=int, default=0, help='Number of data loading workers (default: 4), if 0 debugging mode enabled')
 parser.add_argument("--wandb", action="store_true", help='Use Weights & Biases for data logging')
 parser.add_argument('--wandb_key', type=str, default='', help='Authentication key for Weights & Biases API account ')
@@ -155,7 +155,7 @@ def main():
             assert 0, "incompatible W&B authentication key"
 
     if args.model in models.__all__:
-        if "tinyllama" in args.model:
+        if "tinyllama" in args.model or "mtt" in args.model:
             model, tokenizer = models.init_model(args.model, parser_args=args)
         else:
             model = models.init_model(args.model, num_classes=100)
@@ -187,7 +187,7 @@ def main():
 
 
     UCS = {'cifar100': 'NNR_PYT_CIF100', 'cifar10': 'NNR_PYT_CIF10', 'imagenet200': 'NNR_PYT_IN200',
-           'voc': 'NNR_PYT_VOC', 'V2X': 'NNR_PYT_Telko'}
+           'voc': 'NNR_PYT_VOC', 'V2X': f'{"NNR_PYT_TelkoMTT" if "mtt" in args.model else "NNR_PYT_Telko"}'}
     use_case_name = UCS[args.dataset] if args.dataset in UCS else 'NNR_PYT'
 
     nnc_mdl, nnc_mdl_executer, mdl_params = pytorch_model.create_NNC_model_instance_from_object(
@@ -219,7 +219,7 @@ def main():
                                                               val_ratio=0.0, #if > 0 creates validation split at each client
                                                               )
     else:
-        testloader = datasets.V2X(args, test_only=True, shuffle=False)
+        testloader = datasets.V2X(args, test_only=True, shuffle=False, mtt=True if "mtt" in args.model else False)
 
     perf = nnc_mdl_executer.handle.evaluate(nnc_mdl_executer.model, criterion=nnc_mdl_executer.handle.criterion,
                                             testloader=testloader, device=nnc_mdl_executer.device, verbose=True,
