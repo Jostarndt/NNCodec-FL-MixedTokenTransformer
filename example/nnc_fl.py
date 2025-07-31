@@ -54,6 +54,7 @@ os.environ["RAY_DEDUP_LOGS"] = "0"
 import torch
 import random
 import numpy as np
+import pdb
 
 # PyTorch seeding
 torch.manual_seed(SEED_TORCH)
@@ -83,7 +84,6 @@ import argparse
 import shutil
 import sys
 import torchvision
-import wandb
 import warnings, logging
 import flwr as fl
 from flwr.common import Context
@@ -160,11 +160,13 @@ def main():
         os.makedirs(args.results)
 
     if args.wandb:
+        import wandb
         if isinstance(args.wandb_key, str) and len(args.wandb_key) == 40:
             os.environ["WANDB_API_KEY"] = args.wandb_key
         else:
             assert 0, "incompatible W&B authentication key"
-
+    
+    pdb.set_trace()
     if args.model in models.__all__:
         if "tinyllama" in args.model or "mtt" in args.model:
             model, tokenizer = models.init_model(args.model, parser_args=args)
