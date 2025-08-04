@@ -20,7 +20,7 @@ import torch.distributed as dist
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 
-from tokenizer import Tokenizer
+from nncodec.framework.applications.models.tokenizer import Tokenizer
 
 import re
 import pdb
