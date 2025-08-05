@@ -597,6 +597,42 @@ def process_shard_uint16(args, dest_dir=DATA_CACHE_DIR, out_dir="", chunk_size=i
             with open(tokenized_filename, "ab") as f:
                 f.write(all_tokens.tobytes())
 
+def process_parquet(args, dest_dir=DATA_CACHE_DIR, out_dir=""):
+    shard_id, df = args
+
+    tokenizerpath = "../tokenizer/telko_tokenizer.model"
+    enc = Tokenizer(tokenizerpath)
+
+    vocab_size = enc.sp_model.get_piece_size()
+    vocabulary = [enc.sp_model.id_to_piece(i) for i in range(vocab_size)]
+
+    tokenized_filename = os.path.join(dest_dir, f"clientID_{shard_id}.bin")
+
+    number_of_tokens_per_sample = []
+    all_samples = []
+    with open(tokenized_filename, "ab") as f:
+
+        for time, row in df.iterrows():
+
+            txt_seq = get_feat_string_from_row(row).strip()
+            daytime = f"time = {' '.join(time.strftime('%H%M'))} "
+            txt_seq = daytime + txt_seq
+
+            tokens = enc.encode(txt_seq, bos=False, eos=False)
+
+            if any(x == 0 for x in tokens):
+                print(f"Unknown token in: {txt_seq}")
+
+            all_tokens = np.array(tokens, dtype=np.uint8)
+            f.write(all_tokens.tobytes())
+
+            number_of_tokens_per_sample.append(all_tokens.shape[0])
+
+            all_samples.append(all_tokens)
+
+    print(f"max sequence length of samples: {np.max(number_of_tokens_per_sample)}")
+    print(f"number of samples: {len(number_of_tokens_per_sample)}")
+    print(f"number of tokens:: {np.sum(number_of_tokens_per_sample)}")
 
 def is_number(s):
     try:
@@ -605,7 +641,7 @@ def is_number(s):
     except ValueError:
         return False
 
-def process_parquet(args, dest_dir=DATA_CACHE_DIR, out_dir="", mixed_token=False):
+def process_parquet_mtt(args, dest_dir=DATA_CACHE_DIR, out_dir="", mixed_token=False):
     shard_id, df = args
 
     # tokenizerpath = f"{out_dir}/telko_tokenizer.model"
@@ -710,7 +746,6 @@ def pretokenize_telko(data_path, split='train', out_dir="", normalization=False)
 
     data_set = os.path.join(data_path, f"cellular_dataframe.parquet")
     df = pd.read_parquet(data_set)
-    # pdb.set_trace()
     df = df.query("`operator`== 1")  # Telekom only
     df.columns = df.columns.str.replace(' ', '_')
 
@@ -758,13 +793,20 @@ def pretokenize_telko(data_path, split='train', out_dir="", normalization=False)
                            range(len(client_identifier))]
 
         for client in range(len(client_identifier)):
-            process_parquet((client, shard_filenames[client]), dest_dir=data_dir, out_dir=out_dir, mixed_token=normalization)
+            if normalization:
+                process_parquet_mtt((client, shard_filenames[client]), dest_dir=data_dir, out_dir=out_dir, mixed_token=normalization)
+            else:
+                process_parquet((client, shard_filenames[client]), dest_dir=data_dir, out_dir=out_dir)
+
 
     elif split == 'test':
         tok_df = df.drop(split_df.index)
         shard_filenames = [tok_df]
+        if normalization:
+            process_parquet_mtt((0, shard_filenames[0]), dest_dir=data_dir, out_dir=out_dir, mixed_token=normalization)
+        else:
+            process_parquet((0, shard_filenames[0]), dest_dir=data_dir, out_dir=out_dir)
 
-        process_parquet((0, shard_filenames[0]), dest_dir=data_dir, out_dir=out_dir, mixed_token=normalization)
 
     # pdb.set_trace()# the following only for debugging
     # process_parquet((0,shard_filenames[0]), dest_dir=data_dir, out_dir=out_dir)
