@@ -186,7 +186,7 @@ def main():
     if args.wandb:
         wandb.init(
             config=args,
-            project=f"{args.model}_{args.dataset}_{args.wandb_run_name}",
+            project=f"{args.wandb_run_name}", #{args.model}_{args.dataset}_{args.wandb_run_name}",
             name=f"{args.job_id}{args.num_clients}_{args.model}{'_'+str(args.TLM_size) if args.model == 'tinyllama' else ''}"
                  f"_lr_{args.lr}_bs_{args.batch_size}_qp_{args.qp}"
                  f"{'_diff' if args.compress_differences else '_base'}{'_resids' if args.err_accumulation else ''}"
