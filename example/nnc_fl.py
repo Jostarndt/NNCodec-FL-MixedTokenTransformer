@@ -143,7 +143,7 @@ def main():
     warnings.filterwarnings("ignore")
     logging.getLogger("flwr").setLevel(logging.CRITICAL)
 
-    clear_results = True
+    clear_results = False
 
     if args.diff_qp == None:
         args.diff_qp = args.qp
