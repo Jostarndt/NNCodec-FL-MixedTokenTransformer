@@ -508,5 +508,98 @@ class MixedTokenTransformer(nn.Module):
         extra_args = dict(fused=True) if use_fused else dict()
         optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas, **extra_args)
         print(f"using fused AdamW: {use_fused}")
-
         return optimizer
+
+
+class LSTMModel(nn.Module):
+    def __init__(self, args):
+        super(LSTMModel, self).__init__()
+        
+        # LSTM layer
+        self.lstm = nn.LSTM(
+            input_size=2,
+            hidden_size=128,
+            num_layers=5,
+            batch_first=True,
+            dropout=0.1 
+        )
+        self.output_gating = nn.Sequential(nn.Linear(
+            128, 128),
+            nn.ReLU(),
+            nn.Linear(128, 1))
+        self.output_regression = nn.Sequential(
+                nn.Linear(128, 128),
+                nn.ReLU(),
+                nn.Linear(128, 128),
+                nn.ReLU(),
+                nn.Linear(128, 128),
+                nn.ReLU(),
+                nn.Linear(128, 1))
+
+        self.output = nn.Linear(128 - 1, args.vocab_size, bias=False)
+        
+    def forward(self, tokens: torch.Tensor,
+                targets: Optional[torch.Tensor] = None,
+                _ = None,
+                _two = False):
+        # Initialize hidden state and cell state
+        # batch_size = tokens.shape(0)
+        # h0 = torch.zeros(self.num_layers, batch_size, self.hidden_size).to(x.device)
+        # c0 = torch.zeros(self.num_layers, batch_size, self.hidden_size).to(x.device)
+        
+        # LSTM forward pass
+        lstm_out, (hn, cn) = self.lstm(tokens)
+        
+        # Use the last output for prediction
+        #output = self.fc(lstm_out[:, -1, :])
+        
+        h = lstm_out
+
+        #From MTT
+        if targets is not None:
+            gating_output = self.output_gating(h).float()
+            logits = self.output(h[:, :, 1:])  # [mask_class]
+            regression_outputs = self.output_regression(h)
+
+            cond_mask = targets[:, :, 0]  # h[:,:,0].round()
+            # Create masks
+            mask_class = (cond_mask == 0)
+            mask_reg = (cond_mask == 1)
+
+            if mask_class.any():
+                self.class_loss = F.cross_entropy(logits[mask_class], targets[:, :, 1][mask_class].to(torch.int64),
+                                                  ignore_index=0)
+                # self.class_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets[:,:,1].view(-1), ignore_index=-1)
+            else:
+                self.class_loss = torch.tensor(0.0, requires_grad=True)
+            if mask_reg.any():
+                self.loss_reg = F.mse_loss(regression_outputs[mask_reg].squeeze(), targets[:, :, 1][mask_reg])
+            else:
+                self.loss_reg = torch.tensor(0.0, requires_grad=True)
+            if self.loss_reg == 0:
+                self.decision_loss = torch.tensor(0.0, requires_grad=True)
+            else:
+                self.decision_loss = F.binary_cross_entropy_with_logits(gating_output.squeeze(), targets[:, :,
+                                                                                                 0])  # / or use BCEWithLogitsLoss ?
+        else:
+            # inference-time mini-optimization: only forward the output on the very last position
+            #
+            # returns logits, regression_outputs, binary gating_output, h
+            # if gating_out -> regression,
+            # else -> classification
+            gating_output = (torch.sigmoid(self.output_gating(h)) >= 0.5)[:, [-1],
+                            :]  # note: using list [-1] to preserve the time dim
+            logits = self.output(h[:, [-1], 1:])
+            regression_outputs = self.output_regression(h)[:, [-1], :]
+            #
+            self.class_loss = None
+            self.loss_reg = None
+            self.decision_loss = None
+            '''
+            if binary_gating_output:
+                return regression_outputs
+            else:
+                return logits
+            '''
+
+        return logits, regression_outputs, gating_output, h

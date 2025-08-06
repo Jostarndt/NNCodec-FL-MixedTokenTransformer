@@ -41,9 +41,11 @@ POSSIBILITY OF SUCH DAMAGE.
 from .ResNet_CIFAR import resnet20, resnet20_client_split, resnet20_server_split, resnet56, resnet56_client_split, resnet56_server_split
 from .tinyllama import Transformer, MixedTokenTransformer, ModelArgs
 from .tinyllama import MixedTokenTransformer as mtt
+from .tinyllama import LSTMModel as lstm_model
 from .tokenizer import Tokenizer
+import pdb
 
-__all__ = ['resnet20', 'resnet56', 'tinyllama', 'mtt']
+__all__ = ['resnet20', 'resnet56', 'tinyllama', 'mtt', 'LSTM']
 
 def init_model(model_name, num_classes=100, pretrained=False, parser_args=None):
     ##################################
@@ -61,7 +63,7 @@ def init_model(model_name, num_classes=100, pretrained=False, parser_args=None):
     elif model_name == 'resnet56_server':
         model = resnet56_server_split(class_num=num_classes)
     ##################################
-    elif model_name =='tinyllama' or model_name == 'mtt':
+    elif model_name =='tinyllama' or model_name == 'mtt' or model_name == 'LSTM':
         assert parser_args is not None, ("For tinyllama models please provide parser_args argument including args.TLM_size"
                                          " args.tokenizer_path and optionally args.max_seq_len")
         multiple_of = 32
@@ -114,5 +116,8 @@ def init_model(model_name, num_classes=100, pretrained=False, parser_args=None):
             model = Transformer(conf), enc
         elif model_name == 'mtt':
             model = mtt(conf), enc
+        elif model_name == 'LSTM':
+            model = lstm_model(conf), enc
+
 
     return model
