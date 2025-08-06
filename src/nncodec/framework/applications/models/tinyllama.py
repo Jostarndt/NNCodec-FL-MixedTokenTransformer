@@ -518,25 +518,25 @@ class LSTMModel(nn.Module):
         # LSTM layer
         self.lstm = nn.LSTM(
             input_size=2,
-            hidden_size=128,
-            num_layers=5,
+            hidden_size=args.dim,
+            num_layers=int(1.5*args.n_layers),
             batch_first=True,
             dropout=0.1 
         )
         self.output_gating = nn.Sequential(nn.Linear(
-            128, 128),
+            args.dim, args.dim),
             nn.ReLU(),
-            nn.Linear(128, 1))
+            nn.Linear(args.dim, 1))
         self.output_regression = nn.Sequential(
-                nn.Linear(128, 128),
+                nn.Linear(args.dim, args.dim),
                 nn.ReLU(),
-                nn.Linear(128, 128),
+                nn.Linear(args.dim, args.dim),
                 nn.ReLU(),
-                nn.Linear(128, 128),
+                nn.Linear(args.dim, args.dim),
                 nn.ReLU(),
-                nn.Linear(128, 1))
+                nn.Linear(args.dim, 1))
 
-        self.output = nn.Linear(128 - 1, args.vocab_size, bias=False)
+        self.output = nn.Linear(args.dim - 1, args.vocab_size, bias=False)
         
     def forward(self, tokens: torch.Tensor,
                 targets: Optional[torch.Tensor] = None,

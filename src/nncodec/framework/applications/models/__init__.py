@@ -43,7 +43,6 @@ from .tinyllama import Transformer, MixedTokenTransformer, ModelArgs
 from .tinyllama import MixedTokenTransformer as mtt
 from .tinyllama import LSTMModel as lstm_model
 from .tokenizer import Tokenizer
-import pdb
 
 __all__ = ['resnet20', 'resnet56', 'tinyllama', 'mtt', 'LSTM']
 
