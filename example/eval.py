@@ -156,10 +156,12 @@ def main():
             assert 0, "incompatible W&B authentication key"
 
     if args.model in models.__all__:
-        if "tinyllama" in args.model or "mtt" in args.model:
+        if "tinyllama" in args.model or "LSTM" in args.model or "mtt" in args.model:
             model, tokenizer = models.init_model(args.model, parser_args=args)
         else:
             model = models.init_model(args.model, num_classes=100)
+        if "LSTM" in args.model:
+            args.model = "mtt"
     elif args.model in torchvision.models.list_models(torchvision.models):
         model = torchvision.models.get_model(args.model, weights="DEFAULT" if not args.model_rand_int else None)
     elif args.model in torchvision.models.segmentation.deeplabv3.__all__:
