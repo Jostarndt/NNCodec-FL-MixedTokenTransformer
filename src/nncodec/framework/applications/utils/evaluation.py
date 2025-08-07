@@ -47,6 +47,7 @@ from nncodec.framework.applications.models.tokenizer import Tokenizer
 from nncodec.nnc_core import nnr_model
 from contextlib import nullcontext
 import re
+import time
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -216,7 +217,7 @@ def evaluate_language_model(model, testloader, device='mps', max_batches=3, verb
         vocab_size = enc.sp_model.get_piece_size()
         vocabulary = [enc.sp_model.id_to_piece(i) for i in range(vocab_size)]
 
-        global_predictions, global_gt, global_mse, global_rel_diff = {}, {}, {}, {}
+        global_predictions, global_gt, global_mse, global_rel_diff, glob_t_per_sample = {}, {}, {}, {}, {}
 
     model = model.to(device)
 
@@ -290,7 +291,8 @@ def evaluate_language_model(model, testloader, device='mps', max_batches=3, verb
 
             wrapped_text = [enc.decode(inp_token[i].int().tolist()) for i in range(X.shape[1])]
 
-            arrow_indices = [i for i, s in enumerate(wrapped_text) if s == "-->"]
+            feature_under_test = args.spec_feat_test if args.spec_feat_test is not None else "-->"
+            arrow_indices = [i for i, s in enumerate(wrapped_text) if s == feature_under_test]
             if arrow_indices:
                 input_sample = wrapped_text[:arrow_indices[-1] + 1]
                 input_sample = merge_consecutive_digits(input_sample)
@@ -298,15 +300,22 @@ def evaluate_language_model(model, testloader, device='mps', max_batches=3, verb
 
                 output_sample = wrapped_text[arrow_indices[-1]:]
                 model_input = inp_token[:arrow_indices[-1] + 1].unsqueeze(0)
-                concat_results = []
+                concat_results = [] if feature_under_test == "-->" else [feature_under_test]
                 current_line_length = 0
                 last_char = ""
                 print(f"Predicting [...]\n")
 
+                t_per_token = []
                 for i in range(max(args.max_seq_len, len(output_sample) + 1)):
                     if model_input.shape[1] > args.max_seq_len:
                         break
+
+                    t0 = time.perf_counter()
+
                     logits = model(model_input)
+
+                    tpt = time.perf_counter() - t0
+                    t_per_token.append(tpt)
 
                     arg_max = torch.argmax(logits.squeeze(0), dim=1).item()
                     char = vocabulary[arg_max]
@@ -385,7 +394,16 @@ def evaluate_language_model(model, testloader, device='mps', max_batches=3, verb
                 print(f"Running absolute mean relative differences wrt. ground truth (global):")
                 [print(f"{grel_diff}: {np.mean(np.abs(np.array(global_rel_diff[grel_diff]))):.1f}%") for grel_diff in global_rel_diff]
                 print("---------------------------------------------------------------------------------------\n")
+                print(f"Time to complete test sequence: {np.sum(t_per_token):.2f}s (avg. time per token:{np.mean(t_per_token):.2f}s)")
 
+                if "tSeq" in glob_t_per_sample:
+                    glob_t_per_sample["tSeq"].append(np.sum(t_per_token))
+                    glob_t_per_sample["avgTTok"].append(np.mean(t_per_token))
+                    glob_t_per_sample["numPredTok"].append(len(t_per_token))
+                else:
+                    glob_t_per_sample["tSeq"] = [np.sum(t_per_token)]
+                    glob_t_per_sample["avgTTok"] = [np.mean(t_per_token)]
+                    glob_t_per_sample["numPredTok"] = [len(t_per_token)]
 
                 with open(f'{args.results}/test_predictions.json', 'w') as f:
                     json.dump(global_predictions, f)
@@ -393,6 +411,8 @@ def evaluate_language_model(model, testloader, device='mps', max_batches=3, verb
                     json.dump(global_gt, f)
                 with open(f'{args.results}/test_rel_differences.json', 'w') as f:
                     json.dump(global_rel_diff, f)
+                with open(f'{args.results}/test_times.json', 'w') as f:
+                    json.dump(glob_t_per_sample, f)
 
     loss = torch.mean(torch.tensor(test_loss)).item()
     acc = torch.mean(torch.tensor(test_acc)).item()
@@ -424,7 +444,7 @@ def evaluate_mtt(model, testloader, device='mps', max_batches=3, verbose=False, 
         with open(f'{args.tokenizer_path.split("/")[-2]}/std_dict.json', 'r') as json_file:
             std_dict = json.load(json_file)
 
-        global_predictions, global_gt, global_mse, global_rel_diff = {}, {}, {}, {}
+        global_predictions, global_gt, global_mse, global_rel_diff, glob_t_per_sample = {}, {}, {}, {}, {}
 
     model = model.to(device)
     # if detokenize:
@@ -567,7 +587,8 @@ def evaluate_mtt(model, testloader, device='mps', max_batches=3, verbose=False, 
 
             # print(f"Input:\n{textwrap.fill(' '.join(wrapped_text), width=text_width)} \n")
 
-            arrow_indices = [i for i, s in enumerate(wrapped_text) if s == "-->"]
+            feature_under_test = args.spec_feat_test if args.spec_feat_test is not None else "-->"
+            arrow_indices = [i for i, s in enumerate(wrapped_text) if s == feature_under_test]
 
             input_sample = wrapped_text[:arrow_indices[-1] + 1]
             if numbers.numel() != 0:
@@ -578,14 +599,21 @@ def evaluate_mtt(model, testloader, device='mps', max_batches=3, verbose=False, 
 
             output_sample = wrapped_text[arrow_indices[-1]:]
             model_input = inp_token[:arrow_indices[-1] + 1,:].unsqueeze(0)
-            concat_results = []
+            concat_results = [] if feature_under_test == "-->" else [feature_under_test]
             current_line_length = 0
             print(f"Predicting [...]\n")
 
+            t_per_token = []
             for i in range(max(args.max_seq_len, len(output_sample) + 1)):
                 if model_input.shape[1] > args.max_seq_len:
                     break
+
+                t0 = time.perf_counter()
+
                 logits, reg_out, gating_out, backbone_output = model(model_input)
+
+                tpt = time.perf_counter() - t0
+                t_per_token.append(tpt)
 
                 # number_condition = (len(concat_results) > 2 and concat_results[-1] == "=" and concat_results[-2] in mean_dict)
                 # fill_in_the_gap_condition = number_condition and len(output_sample) > output_sample.index(concat_results[-2]) + 4 and not(is_number(output_sample[output_sample.index(concat_results[-2]) + 4]))
@@ -682,7 +710,16 @@ def evaluate_mtt(model, testloader, device='mps', max_batches=3, verbose=False, 
             print(f"Running absolute mean relative differences wrt. ground truth (global):")
             [print(f"{grel_diff}: {np.mean(np.abs(np.array(global_rel_diff[grel_diff]))):.1f}%") for grel_diff in global_rel_diff]
             print("---------------------------------------------------------------------------------------\n")
+            print(f"Time to complete test sequence: {np.sum(t_per_token):.2f}s (avg. time per token: {np.mean(t_per_token):.2f}s)")
 
+            if "tSeq" in glob_t_per_sample:
+                glob_t_per_sample["tSeq"].append(np.sum(t_per_token))
+                glob_t_per_sample["avgTTok"].append(np.mean(t_per_token))
+                glob_t_per_sample["numPredTok"].append(len(t_per_token))
+            else:
+                glob_t_per_sample["tSeq"] = [np.sum(t_per_token)]
+                glob_t_per_sample["avgTTok"] = [np.mean(t_per_token)]
+                glob_t_per_sample["numPredTok"] = [len(t_per_token)]
 
 
             with open(f'{args.results}/test_predictions.json', 'w') as f:
@@ -691,6 +728,8 @@ def evaluate_mtt(model, testloader, device='mps', max_batches=3, verbose=False, 
                 json.dump(global_gt, f)
             with open(f'{args.results}/test_rel_differences.json', 'w') as f:
                 json.dump(global_rel_diff, f)
+            with open(f'{args.results}/test_times.json', 'w') as f:
+                json.dump(glob_t_per_sample, f)
 
 
     out_class = losses_class.mean()

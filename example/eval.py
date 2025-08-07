@@ -132,6 +132,7 @@ parser.add_argument("--compress_differences", action="store_true", help='Compres
 parser.add_argument("--err_accumulation", action="store_true", help='Locally accumulates quantization errors (residuals)')
 parser.add_argument('--weight_decay', type=float, default=1e-3)
 parser.add_argument('--cuda_device', type=int, default=None)
+parser.add_argument('--spec_feat_test', type=str, default=None, help='Test for specific features (default: None)')
 
 def main():
     args = parser.parse_args()
@@ -171,6 +172,16 @@ def main():
         model.load_state_dict(torch.load(args.model_path))
     elif not args.model_rand_int and args.model_path and not os.path.exists(args.model_path):
         assert 0, f"No model found in {args.model_path}"
+
+    if args.wandb:
+        wandb.init(
+            config=args,
+            project=f"{args.wandb_run_name}", #{args.model}_{args.dataset}_{args.wandb_run_name}",
+            name=f"{args.job_id}_{args.model_path.split('/')[-1]}",
+            entity="edl-group",
+            save_code=True,
+            dir=f"{args.results}"
+        )
 
     state_dict = model.state_dict()
 
