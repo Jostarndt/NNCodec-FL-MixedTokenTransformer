@@ -78,8 +78,9 @@ class NNClient(fl.client.NumPyClient):
             self.optimizer = c_model.configure_optimizers(args.weight_decay, args.lr, (0.9, 0.95), device.type)
         except:
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=args.lr)
-        if hasattr(self.model, 'norm'): # LR of GradNorm can be different to LR from optimizer!
-            self.grad_norm = GradNormLossWeighter(num_losses=3, learning_rate=args.lr, restoring_force_alpha=0, grad_norm_parameters=self.model.norm.weight)
+        if hasattr(self.model, 'output_gating'): # LR of GradNorm can be different to LR from optimizer!
+            self.grad_norm = GradNormLossWeighter(num_losses=3, learning_rate=args.lr, restoring_force_alpha=0,
+                                                  grad_norm_parameters=self.model.norm.weight)
         else:
             self.grad_norm = None
         self.accumulated_bs_sizes_per_round = 0
