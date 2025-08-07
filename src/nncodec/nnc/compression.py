@@ -45,6 +45,7 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import numpy as np
 import copy
+import wandb
 from timeit import default_timer as timer
 from nncodec import nnc_core
 from nncodec.nnc_core import nnr_model
@@ -422,6 +423,8 @@ def compress(
 
     end = timer()
     __print_output_line("DONE in {:.4f} s\n".format(end-start), verbose=verbose)
+    if wandb_logging and wandb.run is not None:
+        wandb.log({"encInitT": end-start})
 
     ##PREPROCESSING
     if ioq and not bnf_mapping:
@@ -479,6 +482,8 @@ def compress(
                                                )
     end = timer()
     __print_output_line("DONE in {:.4f} s\n".format( end-start ), verbose=verbose)
+    if wandb_logging and wandb.run is not None:
+        wandb.log({"quantT": end-start})
 
     if quantize_only:
         nnc_core.approximator.rec(approx_data_enc)
@@ -492,12 +497,16 @@ def compress(
                                          approx_param_base=approx_param_base
                                          )
     end = timer()
+    if wandb_logging and wandb.run is not None:
+        wandb.log({"encT": end-start})
     __print_output_line("DONE in {:.4f} s\n".format( end-start ), verbose=verbose)
 
     original_size = nnc_mdl.model_info["original_size"]
 
     __print_output_line("COMPRESSED FROM {} BYTES TO {} BYTES ({:.2f} KB, {:.2f} MB, COMPRESSION RATIO: {:.2f} %) in {:.4f} s\n".format(original_size, len(bitstream), len(bitstream)/1000.0, len(bitstream)/1000000.0, len(bitstream)/original_size*100, end-start_overall), verbose=True)
-    
+    if wandb_logging and wandb.run is not None:
+        wandb.log({"overallEncT": end - start_overall})
+
     if bitstream_path is not None:
         with open( bitstream_path, "wb" ) as br_file:
             br_file.write( bitstream )
@@ -515,6 +524,7 @@ def decompress( bitstream_or_path,
                 approx_param_base=None,
                 update_base_param=False,
                 internal_states_path=None,
+                wandb_logging=False,
                 ):
 
     dec_model_info  = {'parameter_type': {},
@@ -546,7 +556,7 @@ def decompress( bitstream_or_path,
 
     hls_bytes = {}
     oob_dict = {}
-    start = timer()
+
     __print_output_line("DECODING...", verbose=verbose)
     if isinstance(bitstream_or_path, bytearray):
         bitstream = bitstream_or_path
@@ -563,14 +573,17 @@ def decompress( bitstream_or_path,
         loaded_internal_states = {k: loaded_states[k].item() for k in loaded_states.files}
         approx_param_base = loaded_internal_states['approx_param_base']
 
+    start = timer()
     dec_approx_data = nnc_core.coder.decode(bitstream, dec_model_info, hls_stats=hls_bytes, oob_dict=oob_dict,
                                             approx_param_base=approx_param_base, update_base_param=update_base_param)
+    end = timer()
 
     if internal_states_path and approx_param_base["parameters"]:
         np.savez(f"{_int_states_path}", **loaded_internal_states)
 
-    end = timer()
     __print_output_line("DONE in {:.4f} s\n".format( end-start ), verbose=verbose)
+    if wandb_logging and wandb.run is not None:
+        wandb.log({"decT": end-start})
 
     start = timer()
     rec_approx_data = dec_approx_data
@@ -583,6 +596,8 @@ def decompress( bitstream_or_path,
     rec_approx_data = nnc_core.approximator.recompose_params( dec_model_info, rec_approx_data)
     end = timer()
     __print_output_line("DONE in {:.4f} s\n".format( end-start ), verbose=verbose)
+    if wandb_logging and wandb.run is not None:
+        wandb.log({"recT": end-start})
     
     if return_model_information:
         model_information["topology_storage_format"] = dec_model_info["topology_storage_format"]

@@ -87,7 +87,7 @@ import warnings, logging
 import flwr as fl
 from flwr.common import Context
 
-from nncodec.fl import encode, NNClient, NNCFedAvg
+from nncodec.fl import encode, decode, NNClient, NNCFedAvg
 from nncodec import nnc
 from nncodec.framework import pytorch_model
 from nncodec.framework.applications.utils.transforms import split_datasets, torch_mdl_to_flwr_params
@@ -141,7 +141,7 @@ parser.add_argument('--cuda_device', type=int, default=None)
 def main():
     args = parser.parse_args()
     warnings.filterwarnings("ignore")
-    logging.getLogger("flwr").setLevel(logging.CRITICAL)
+    # logging.getLogger("flwr").setLevel(logging.CRITICAL)
 
     clear_results = False
 
@@ -287,7 +287,7 @@ def main():
         mdl_info=mdl_info,
         args=args,
         encode_fn=encode,
-        decode_fn=nnc.decompress
+        decode_fn=decode(wandb_logging=args.wandb)
     )
 
     # Launch the simulation

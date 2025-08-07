@@ -99,5 +99,11 @@ def encode(model, args=None, epoch=0, nnc_mdl=None, model_executer=None, blkid_p
                       int_quant_bw=args["bitdepth"],
                       compress_differences=args["compress_differences"],
                       codebook_mode=2 if args["approx_method"] == 'codebook' else 0,
+                      wandb_logging=args["wandb"],
                       )
     return bs
+
+def decode(wandb_logging):
+    def decode_fn(*args, **kwargs):
+        return nnc.decompress(*args, wandb_logging=wandb_logging, **kwargs)
+    return decode_fn
