@@ -247,7 +247,7 @@ def evaluate_language_model(model, testloader, device='mps', max_batches=3, verb
         if detokenize:
             X, Y = batch, None
         else:
-            X, Y = batch, None
+            X, Y = batch
 
         X = X.to(device, non_blocking=True)
         if Y is not None:
@@ -519,7 +519,7 @@ def evaluate_mtt(model, testloader, device='mps', max_batches=3, verbose=False, 
         if detokenize:
             X, Y = batch, None
         else:
-            X, Y = batch, None
+            X, Y = batch
 
         X = X.to(device, non_blocking=True)
         if Y is not None:
