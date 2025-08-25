@@ -247,7 +247,7 @@ def evaluate_language_model(model, testloader, device='mps', max_batches=3, verb
         if detokenize:
             X, Y = batch, None
         else:
-            X, Y = batch
+            X, Y = batch, None
 
         X = X.to(device, non_blocking=True)
         if Y is not None:
@@ -304,19 +304,17 @@ def evaluate_language_model(model, testloader, device='mps', max_batches=3, verb
                 current_line_length = 0
                 last_char = ""
                 print(f"Predicting [...]\n")
-
                 t_per_token = []
                 for i in range(max(args.max_seq_len, len(output_sample) + 1)):
                     if model_input.shape[1] > args.max_seq_len:
                         break
 
                     t0 = time.perf_counter()
-
                     logits = model(model_input)
 
                     tpt = time.perf_counter() - t0
                     t_per_token.append(tpt)
-
+                    
                     arg_max = torch.argmax(logits.squeeze(0), dim=1).item()
                     char = vocabulary[arg_max]
 
@@ -521,7 +519,7 @@ def evaluate_mtt(model, testloader, device='mps', max_batches=3, verbose=False, 
         if detokenize:
             X, Y = batch, None
         else:
-            X, Y = batch
+            X, Y = batch, None
 
         X = X.to(device, non_blocking=True)
         if Y is not None:
@@ -604,7 +602,8 @@ def evaluate_mtt(model, testloader, device='mps', max_batches=3, verbose=False, 
             print(f"Predicting [...]\n")
 
             t_per_token = []
-            for i in range(max(args.max_seq_len, len(output_sample) + 1)):
+            tokens_to_predict = max(args.max_seq_len, len(output_sample) + 1) if (args.spec_feat_test is None) else 4
+            for i in range(tokens_to_predict):
                 if model_input.shape[1] > args.max_seq_len:
                     break
 
@@ -678,7 +677,6 @@ def evaluate_mtt(model, testloader, device='mps', max_batches=3, verbose=False, 
                                 pass
                     i += 1
                 return values
-
 
             predicted_values = extract_values(concat_results)
             ground_truth_values = extract_values(output_sample)
