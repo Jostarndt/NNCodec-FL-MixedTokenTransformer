@@ -536,6 +536,7 @@ class LSTMModel(nn.Module):
                 nn.ReLU(),
                 nn.Linear(args.dim, 1))
 
+        self.fc = nn.Linear(args.dim , args.dim)
         self.output = nn.Linear(args.dim - 1, args.vocab_size, bias=False)
 
         self.norm = RMSNorm(args.dim, eps=args.norm_eps)
@@ -553,8 +554,8 @@ class LSTMModel(nn.Module):
         lstm_out, (hn, cn) = self.lstm(tokens)
         
         # Use the last output for prediction
-        #output = self.fc(lstm_out[:, -1, :])
-        h = self.norm(lstm_out)
+        h  = self.fc(lstm_out)
+        #h = self.norm(lstm_out)
         #h = lstm_out
 
         #From MTT
