@@ -602,7 +602,12 @@ def evaluate_mtt(model, testloader, device='mps', max_batches=3, verbose=False, 
             print(f"Predicting [...]\n")
 
             t_per_token = []
-            tokens_to_predict = max(args.max_seq_len, len(output_sample) + 1) if (args.spec_feat_test is None) else 4
+
+            # remove unnecessary whites at the end
+            while output_sample and output_sample[-1] == '':
+                    output_sample.pop()
+            #tokens_to_predict = max(args.max_seq_len, len(output_sample) + 1) if (args.spec_feat_test is None) else 4
+            tokens_to_predict = len(output_sample) if (args.spec_feat_test is None) else 4
             for i in range(tokens_to_predict):
                 if model_input.shape[1] > args.max_seq_len:
                     break
