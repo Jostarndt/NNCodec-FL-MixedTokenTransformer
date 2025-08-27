@@ -514,10 +514,10 @@ class MixedTokenTransformer(nn.Module):
 class LSTMModel(nn.Module):
     def __init__(self, args):
         super(LSTMModel, self).__init__()
-        
+        self.tok_embeddings = nn.Embedding(args.vocab_size, args.dim)
         # LSTM layer
         self.lstm = nn.LSTM(
-            input_size=1,
+            input_size=args.dim,
             hidden_size=args.dim,
             num_layers=int(1.5*args.n_layers),
             batch_first=True,
@@ -539,6 +539,9 @@ class LSTMModel(nn.Module):
         #self.fc = nn.Linear(args.dim , args.dim)
         self.output = nn.Linear(args.dim, args.vocab_size, bias=False)
 
+        #weight tying:
+        self.output.weight = self.tok_embeddings.weight
+
         self.norm = RMSNorm(args.dim, eps=args.norm_eps)
         
     def forward(self, tokens: torch.Tensor,
@@ -551,15 +554,14 @@ class LSTMModel(nn.Module):
         # c0 = torch.zeros(self.num_layers, batch_size, self.hidden_size).to(x.device)
         
         # LSTM forward pass
-        print("TOKENS HAVE SHAPE")
-        print(tokens.shape)
-        tokens = tokens.unsqueeze(2).to(torch.float16)
+        tokens = self.tok_embeddings(tokens)
+        #tokens = tokens.unsqueeze(2).to(torch.float16)
         lstm_out, (hn, cn) = self.lstm(tokens)
         
         # Use the last output for prediction
         #h  = self.fc(lstm_out)
-        h = self.norm(lstm_out)
-        #h = lstm_out
+        #h = self.norm(lstm_out)
+        h = lstm_out
         
         #
         # from DBD
@@ -574,7 +576,6 @@ class LSTMModel(nn.Module):
             # inference-time mini-optimization: only forward the output on the very last position
             logits = self.output(h[:, [-1], :]) # note: using list [-1] to preserve the time dim
             self.last_loss = None
-
         return logits
 
         
