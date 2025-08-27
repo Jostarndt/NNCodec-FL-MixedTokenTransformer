@@ -553,7 +553,7 @@ class LSTMModel(nn.Module):
         # LSTM forward pass
         print("TOKENS HAVE SHAPE")
         print(tokens.shape)
-        tokens = tokens.unsqueeze(2)
+        tokens = tokens.unsqueeze(2).to(torch.float16)
         lstm_out, (hn, cn) = self.lstm(tokens)
         
         # Use the last output for prediction
