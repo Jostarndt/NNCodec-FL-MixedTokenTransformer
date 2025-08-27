@@ -518,6 +518,7 @@ class LSTMModel(nn.Module):
         # LSTM layer
         self.lstm = nn.LSTM(
             input_size=1,
+            batch_first=True,
             hidden_size=args.dim,
             num_layers=int(1.5*args.n_layers),
             batch_first=True,
@@ -551,6 +552,9 @@ class LSTMModel(nn.Module):
         # c0 = torch.zeros(self.num_layers, batch_size, self.hidden_size).to(x.device)
         
         # LSTM forward pass
+        print("TOKENS HAVE SHAPE")
+        print(tokens.shape)
+        tokens = tokens.view(8, 823, 1)
         lstm_out, (hn, cn) = self.lstm(tokens)
         
         # Use the last output for prediction
