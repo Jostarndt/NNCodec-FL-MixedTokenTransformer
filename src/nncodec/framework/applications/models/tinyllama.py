@@ -537,7 +537,7 @@ class LSTMModel(nn.Module):
                 nn.Linear(args.dim, 1))
 
         #self.fc = nn.Linear(args.dim , args.dim)
-        self.output = nn.Linear(args.dim - 1, args.vocab_size, bias=False)
+        self.output = nn.Linear(args.dim, args.vocab_size, bias=False)
 
         self.norm = RMSNorm(args.dim, eps=args.norm_eps)
         
