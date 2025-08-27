@@ -536,7 +536,7 @@ class LSTMModel(nn.Module):
                 nn.ReLU(),
                 nn.Linear(args.dim, 1))
 
-        self.fc = nn.Linear(args.dim , args.dim)
+        #self.fc = nn.Linear(args.dim , args.dim)
         self.output = nn.Linear(args.dim - 1, args.vocab_size, bias=False)
 
         self.norm = RMSNorm(args.dim, eps=args.norm_eps)
@@ -554,11 +554,31 @@ class LSTMModel(nn.Module):
         lstm_out, (hn, cn) = self.lstm(tokens)
         
         # Use the last output for prediction
-        h  = self.fc(lstm_out)
-        #h = self.norm(lstm_out)
+        #h  = self.fc(lstm_out)
+        h = self.norm(lstm_out)
         #h = lstm_out
+        
+        #
+        # from DBD
+        #
+        if targets is not None:
+            # if we are given some desired targets also calculate the loss
+            logits = self.output(h)
+            if targets.dtype != torch.long:
+                targets = targets.type(torch.long)
+            self.last_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
+        else:
+            # inference-time mini-optimization: only forward the output on the very last position
+            logits = self.output(h[:, [-1], :]) # note: using list [-1] to preserve the time dim
+            self.last_loss = None
 
-        #From MTT
+        return logits
+
+        
+        #
+        # From MTT
+        #
+        '''
         if targets is not None:
             gating_output = self.output_gating(h).float()
             logits = self.output(h[:, :, 1:])  # [mask_class]
@@ -598,14 +618,16 @@ class LSTMModel(nn.Module):
             self.class_loss = None
             self.loss_reg = None
             self.decision_loss = None
-            '''
-            if binary_gating_output:
-                return regression_outputs
-            else:
-                return logits
-            '''
+        '''
+        #
+        #    #if binary_gating_output:
+        #    #    return regression_outputs
+        #    #else:
+        #    #    return logits
+        '''
 
         return logits, regression_outputs, gating_output, h
+        '''
 
     def configure_optimizers(self, weight_decay, learning_rate, betas, device_type):
         # start with all of the candidate parameters
