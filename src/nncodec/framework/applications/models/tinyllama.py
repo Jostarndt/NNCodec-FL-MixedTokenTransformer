@@ -517,7 +517,7 @@ class LSTMModel(nn.Module):
         
         # LSTM layer
         self.lstm = nn.LSTM(
-            input_size=2,
+            input_size=1,
             hidden_size=args.dim,
             num_layers=int(1.5*args.n_layers),
             batch_first=True,
