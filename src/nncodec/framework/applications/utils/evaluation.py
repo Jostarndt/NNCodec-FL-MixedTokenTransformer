@@ -48,6 +48,8 @@ from nncodec.nnc_core import nnr_model
 from contextlib import nullcontext
 import re
 import time
+import textwrap
+import json
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -199,20 +201,19 @@ def evaluate_classification_model_TEF(model, test_loader, test_set, num_workers=
 
     return acc
 
+def is_number(s):
+    try:
+        float(s)  # float() can handle both integers and floats
+        return True
+    except ValueError:
+        return False
+
+
+
 @torch.no_grad()
 def evaluate_language_model(model, testloader, device='mps', max_batches=3, verbose=False, criterion=None, detokenize=False, args=None):
 
     if detokenize:
-        import textwrap
-        import json
-
-        def is_number(s):
-            try:
-                float(s)  # float() can handle both integers and floats
-                return True
-            except ValueError:
-                return False
-
         enc = Tokenizer(tokenizer_model=f"{args.tokenizer_path}")
         vocab_size = enc.sp_model.get_piece_size()
         vocabulary = [enc.sp_model.id_to_piece(i) for i in range(vocab_size)]
@@ -423,16 +424,6 @@ def evaluate_language_model(model, testloader, device='mps', max_batches=3, verb
 def evaluate_mtt(model, testloader, device='mps', max_batches=3, verbose=False, criterion=None, detokenize=False, args=None):
 
     if detokenize:
-        import textwrap
-        import json
-
-        # def is_number(s):
-        #     try:
-        #         float(s)  # float() can handle both integers and floats
-        #         return True
-        #     except ValueError:
-        #         return False
-
         enc = Tokenizer(tokenizer_model=f"{args.tokenizer_path}")
         vocab_size = enc.sp_model.get_piece_size()
         vocabulary = [enc.sp_model.id_to_piece(i) for i in range(vocab_size)]
@@ -445,21 +436,6 @@ def evaluate_mtt(model, testloader, device='mps', max_batches=3, verbose=False, 
         global_predictions, global_gt, global_mse, global_rel_diff, glob_t_per_sample = {}, {}, {}, {}, {}
 
     model = model.to(device)
-    # if detokenize:
-    #     class Iterator:
-    #         @staticmethod
-    #         def iter_batches(dataloader, device):
-    #             for x in dataloader:
-    #                 x = x.to(device, non_blocking=True)
-    #                 yield x
-    # else:
-    #     class Iterator:
-    #         @staticmethod
-    #         def iter_batches(dataloader, device):
-    #             for x, y in dataloader:
-    #                 x = x.to(device, non_blocking=True)
-    #                 y = y.to(device, non_blocking=True)
-    #                 yield x, y
 
     exclude_strings = {'=', '-->', ''}
 
@@ -488,19 +464,12 @@ def evaluate_mtt(model, testloader, device='mps', max_batches=3, verbose=False, 
         else torch.amp.autocast(device_type=device.type, dtype=ptdtype)
     )
 
-    # test_batch_iter = []
-    # batch_iter = Iterator.iter_batches(testloader, device)
 
     if max_batches == None:
         try:
             max_batches = len(testloader)
         except:
             max_batches = testloader.dataset.num_samples
-
-    # for idx, x in enumerate(batch_iter):
-    #     if idx >= max_batches:
-    #         break
-    #     test_batch_iter.append(x)
 
     model.eval()
     test_loss = []
