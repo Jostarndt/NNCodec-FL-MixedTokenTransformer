@@ -161,7 +161,7 @@ def main():
         else:
             model = models.init_model(args.model, num_classes=100)
         if "LSTM" in args.model:
-            args.model = "mtt"
+            args.model = "tinyllama"
     elif args.model in torchvision.models.list_models(torchvision.models):
         model = torchvision.models.get_model(args.model, weights="DEFAULT" if not args.model_rand_int else None)
     elif args.model in torchvision.models.segmentation.deeplabv3.__all__:
