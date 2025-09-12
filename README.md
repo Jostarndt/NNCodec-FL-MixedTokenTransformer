@@ -22,27 +22,36 @@ ArXiv bibtex
 
 Requirements
 
-- Python >= 3.8 with working pip
+- Python >= 3.10
+
+install 
 
 ```bash
-pip install nncodec
+pip install -e . 
 ```
 
-For tokenization
-`pip install pyarrow`
+For tokenization, additionally
+
+```bash
+pip install pyarrow
+```
 
 
 ## Usage
 
 ### Tokenization
-
+To Tokenize the data, download the cellular_dataframe.parquet file from [Berlin V2X](https://ieee-dataport.org/open-access/berlin-v2x). Then run one of the two preprocessing steps
 Tokenize for the digitwise transformer: 
 
-```python3 telko_dataloader.py pretokenize_telko_digit --data_path ./cellular_dataframe.parquet```
+```
+python3 telko_dataloader.py pretokenize_telko_digit --data_path ./cellular_dataframe.parquet
+```
 
 Tokenize for the mixed token transformer
 
-```python3 telko_dataloader.py pretokenize_telko_mtt --data_path ./cellular_dataframe.parquet ```
+```
+python3 telko_dataloader.py pretokenize_telko_mtt --data_path ./cellular_dataframe.parquet
+```
 
 **Parameters**
 
