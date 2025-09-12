@@ -38,11 +38,11 @@ For tokenization
 
 Tokenize for the digitwise transformer: 
 
-`python3 telko_dataloader.py pretokenize_telko_digit --data_path ./cellular_dataframe.parquet`
+```python3 telko_dataloader.py pretokenize_telko_digit --data_path ./cellular_dataframe.parquet```
 
 Tokenize for the mixed token transformer
 
-```python3 telko_dataloader.py pretokenize_telko_mtt --data_path "....." ```
+```python3 telko_dataloader.py pretokenize_telko_mtt --data_path ./cellular_dataframe.parquet ```
 
 **Parameters**
 
