@@ -2,9 +2,13 @@
 
 # Efficient Federated Learning of Mixed-Token Transformers for Cellular Feature Prediction
 
+
+</div>
+
+
 Accepted at GLOBECOM2025!
 
-Currently only on ArXiv until conference date.
+Currently only on ArXiv until official release.
 
 Cite:
 
@@ -13,11 +17,35 @@ ArXiv bibtex
 ```
 
 
-<img src="https://github.com/fraunhoferhhi/nncodec/assets/65648299/69b41b38-19ed-4c45-86aa-2b2cd4d835f7" width="660"/>
 
-# A Software Implementation of the ISO/IEC 15938-17 Neural Network Coding (NNC) Standard
+## Paper results
 
-</div>
+    
+  **TL;DR** -  This work introduces a communication-efficient Federated Learning (FL) framework for training tiny language models (TLMs) that collaboratively learn to predict mobile network features (such as ping, SNR or frequency band) across five geographically distinct regions from the Berlin V2X dataset. Using NNCodec, the framework reduces communication overhead by over 99% with minimal performance degradation, enabling scalable FL deployment across autonomous mobile network cells.
+  <img src="https://github.com/user-attachments/assets/4fba1aca-50ca-492f-901b-d601cc20874c" width="750" /> <br>
+
+  To reproduce the experimental results and evaluate NNCodec in the telco FL setting described above, execute:
+
+  ```bash
+  python example/nnc_fl.py --dataset=V2X --dataset_path=<your_path>/v2x --model=tinyllama --model_rand_int \
+  --num_clients=5 --epochs=30 --compress_upstream --compress_downstream --err_accumulation --compress_differences \
+  --qp=-18 --batch_size=8 --max_batches=300 --max_batches_test=150 --sparsity=0.8 --struct_spars_factor=0.9 \
+  --TLM_size=1 --tca --tokenizer_path=./example/tokenizer/telko_tokenizer.model
+  ```
+
+  The pre-tokenized [Berlin V2X dataset](https://ieee-dataport.org/open-access/berlin-v2x) can be downloaded here: https://datacloud.hhi.fraunhofer.de/s/CcAeHRoWRqe5PiQ
+  and the pre-trained Sentencepiece Tokenizer is included in this repository at [telko_tokenizer.model](https://github.com/d-becking/nncodec2/blob/master/example/tokenizer/).
+  
+  Resulting bitstreams and the best performing global TLM of all communication rounds will be stored in a `results` directory (with path set via `--results`).
+  To evaluate this model, execute:
+
+  ```bash
+  python example/eval.py --model_path=<your_path>/best_tinyllama_.pt --batch_size=1 --dataset=V2X \
+  --dataset_path=<your_path>/v2x --model=tinyllama --TLM_size=1 --tokenizer_path=./example/tokenizer/telko_tokenizer.model
+  ```
+
+
+
 
 
 ## Table of Contents
