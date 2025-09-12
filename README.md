@@ -1,5 +1,18 @@
 <div align="center">
 
+# Efficient Federated Learning of Mixed-Token Transformers for Cellular Feature Prediction
+
+Accepted at GLOBECOM2025!
+
+Currently only on ArXiv until conference date.
+
+Cite:
+
+```
+ArXiv bibtex
+```
+
+
 <img src="https://github.com/fraunhoferhhi/nncodec/assets/65648299/69b41b38-19ed-4c45-86aa-2b2cd4d835f7" width="660"/>
 
 # A Software Implementation of the ISO/IEC 15938-17 Neural Network Coding (NNC) Standard
