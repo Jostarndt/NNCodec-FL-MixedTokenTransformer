@@ -100,7 +100,7 @@ python3 eval.py --model_path=best_mtt_MTT_UC_slurmID_67554_gitID_917ac77.pt --ba
 | `--batch_size` | batch size |
 | `--max_seq_len` | Maximum sequence length |
 | `--workers` |  |
-| `--spec_feat_test="feature"` | Specific feature "feature" to test on, without accumulated losses, e.g. "datarate" |
+| `--spec_feat_test=feature` | Specific feature "feature" to test on, without accumulated losses, e.g. "datarate" |
 
 
     
