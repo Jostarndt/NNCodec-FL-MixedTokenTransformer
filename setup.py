@@ -169,7 +169,8 @@ setup(
         "hydra-core>=1.3.2",
         "sentencepiece>=0.1.99",
         "numpy<2",
-        "gradnorm_pytorch"
+        "gradnorm_pytorch",
+        "pyarrow"
     ],
     setup_requires=['pybind11>=2.6.2'],
     zip_safe=False,
