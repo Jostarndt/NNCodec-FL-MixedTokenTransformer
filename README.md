@@ -144,13 +144,6 @@ The original file [nnc_fl.py](https://github.com/d-becking/nncodec2/blob/master/
 Federated Learning with NNCodec. It imports the `NNClient` and `NNCFedAvg` classes — specialized NNC-[*Flower*](https://flower.ai) objects — that 
 are responsible for establishing and handling the compressed FL environment.
 
-The default configuration launches FL with two _ResNet-56_ clients learning the _CIFAR-100_ classification task. The _CIFAR_ dataset
-is automatically downloaded if not available under `--dataset_path` (~170MB).
-```bash
-python example/nnc_fl.py --dataset_path=<your_path> --model_rand_int --epochs=30 --compress_upstream --compress_downstream --err_accumulation --compress_differences
-```
-
-
 
 ## Important References / EUCnc
 
