@@ -30,12 +30,6 @@ install
 pip install -e . 
 ```
 
-For tokenization, additionally
-
-```bash
-pip install pyarrow
-```
-
 
 ## Usage
 
