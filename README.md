@@ -162,6 +162,6 @@ Please see [LICENSE.txt](./LICENSE.txt) file for the terms of the use of the con
 
 For more information and bug reports, please contact: [nncodec@hhi.fraunhofer.de](mailto\:nncodec@hhi.fraunhofer.de)
 
-**Copyright (c) 2019-2025, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The NNCodec Authors.**
+**Copyright (c) 2019-2025, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.**
 
 **All rights reserved.**
