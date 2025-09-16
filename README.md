@@ -34,7 +34,7 @@ pip install -e .
 ## Usage
 
 ### Tokenization
-To Tokenize the data, download the cellular_dataframe.parquet file from [Berlin V2X](https://ieee-dataport.org/open-access/berlin-v2x). Then run one of the two preprocessing steps
+To Tokenize the data, download the cellular_dataframe.parquet file from [Berlin ](https://ieee-dataport.org/open-access/berlin-). Then run one of the two preprocessing steps
 
   A. Tokenize for the digitwise transformer: 
 
@@ -82,7 +82,7 @@ python3 example/nnc_fl.py --dataset_path=./preprocessing/ --model=LSTM --model_r
 
 ### Evaluation
 ```
-python3 eval.py --model_path=best_mtt_MTT_UC_slurmID_67554_gitID_917ac77.pt --batch_size=1 --dataset=V2X --dataset_path=./preprocessing/ --model=mtt --TLM_size=1 --tokenizer_path=./tokenizer/telko_tokenizer.model --max_seq_len=528 --workers=0  --spec_feat_test="datarate"
+python3 eval.py --model_path=best_mtt_MTT_UC_slurmID_67554_gitID_917ac77.pt --batch_size=1 --dataset_path=./preprocessing/ --model=mtt --TLM_size=1 --tokenizer_path=./tokenizer/telko_tokenizer.model --max_seq_len=528 --workers=0  --spec_feat_test="datarate"
 ```
 
 **Parameters**
