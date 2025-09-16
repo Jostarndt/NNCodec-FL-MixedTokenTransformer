@@ -115,7 +115,7 @@ parser.add_argument('--lr', type=float, default=3e-4, help='Learning rate (defau
 parser.add_argument('--model', type=str, default='resnet56', metavar=f'any of {models.__all__} or {torchvision.models.list_models(torchvision.models)}')
 parser.add_argument('--model_path', type=str, default=None, metavar='./example/ResNet56_CIF100.pt')
 parser.add_argument('--model_rand_int', action="store_true", help='model randomly initialized, i.e., w/o loading pre-trained weights')
-parser.add_argument('--dataset', type=str, default='cifar100', metavar=f"Any of {datasets.__all__}")
+parser.add_argument('--dataset', type=str, default='V2X', metavar=f"Any of {datasets.__all__}")
 parser.add_argument('--dataset_path', type=str, default='../data')
 parser.add_argument('--tokenizer_path', type=str, default='./tokenizer/telko_tokenizer.model')
 parser.add_argument('--max_seq_len', type=int, default=1525, help='Custom max_seq_len for tiny Llama')
