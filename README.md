@@ -57,7 +57,7 @@ python3 telko_dataloader.py pretokenize_telko_mtt --data_path ./cellular_datafra
 ### Training
 
 ```bash
-python3 example/nnc_fl.py --dataset_path=./preprocessing/ --model=LSTM --model_rand_int --num_clients=5 --epochs=30 --batch_size=8 --max_batches=300 --max_batches_test=150 --TLM_size=1 --tokenizer_path=./tokenizer/telko_tokenizer.model
+python3 example/nnc_fl.py --dataset_path=./preprocessing/ --model=LSTM --num_clients=5 --epochs=30 --batch_size=8 --max_batches=300 --max_batches_test=150 --TLM_size=1 --tokenizer_path=./tokenizer/telko_tokenizer.model
 ```
 
 
@@ -67,7 +67,6 @@ python3 example/nnc_fl.py --dataset_path=./preprocessing/ --model=LSTM --model_r
 |-----------|-------------|
 | `--dataset_path` | Path to preprocessed data |
 | `--model` | Model architecture, one of (DBD/mtt/LSTM) |
-| `--model_rand_int` | Enable model randomization |
 | `--num_clients` | Number of federated clients |
 | `--epochs` | Training epochs per round |
 | `--batch_size` | Batch size for training |
