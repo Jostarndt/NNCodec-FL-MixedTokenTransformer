@@ -599,8 +599,8 @@ def process_shard_uint16(args, dest_dir=DATA_CACHE_DIR, out_dir="", chunk_size=i
 
 def process_parquet(args, dest_dir=DATA_CACHE_DIR, out_dir=""):
     shard_id, df = args
-
-    tokenizerpath = "../tokenizer/telko_tokenizer.model"
+    
+    tokenizerpath = os.path.dirname(os.path.abspath(__file__))+"/../tokenizer/telko_tokenizer.model"
     enc = Tokenizer(tokenizerpath)
 
     vocab_size = enc.sp_model.get_piece_size()
@@ -679,7 +679,6 @@ def process_parquet_mtt(args, dest_dir=DATA_CACHE_DIR, out_dir="", mixed_token=F
         # txt_seq = txt_seq.replace("=", " = ").replace("-->", " --> ")
         #
         # txt_seq = " ".join(txt_seq.split())
-        # pdb.set_trace()
         tokens = enc.encode(' '.join(str_token_list), bos=False, eos=False)
 
         # contains_nans = (np.array(tokens)<0).any()
@@ -707,7 +706,6 @@ def process_parquet_mtt(args, dest_dir=DATA_CACHE_DIR, out_dir="", mixed_token=F
         all_tokens = np.array(combined, dtype=np.float32)
         number_of_tokens_per_sample.append(all_tokens.shape[0])
         # np.save(f, all_tokens)
-        # pdb.set_trace()
         #all_tokens = np.array(tokens, dtype=np.uint8)
         #f.write(all_tokens.tobytes())
         all_samples.append(all_tokens)
@@ -740,9 +738,8 @@ def pretokenize_telko(data_path, split='train', out_dir="", normalization=False)
     # iterate the shards and tokenize all of them one by one
 
     data_dir = os.path.join(data_path, f"{split}")
-
-    print(f"write tokenized bin sequences to binary files in {data_dir}")
-    os.makedirs(data_dir, exist_ok=True)
+    print(f"write tokenized bin sequences to binary files in {out_dir}")
+    os.makedirs(out_dir, exist_ok=True)
 
     data_set = os.path.join(data_path, f"cellular_dataframe.parquet")
     df = pd.read_parquet(data_set)
@@ -1185,7 +1182,7 @@ if __name__ == "__main__":
     parser.add_argument("stage", type=str, choices=["pretokenize_telko_digit", "pretokenize_telko_mtt", "train_telko_vocab", "get_number_of_bins"])
     parser.add_argument("--vocab_size", type=int, default=5, help="pretokenization vocab size. 0 = use Llama 2 tokenizer.")
     parser.add_argument("--data_path", type=str, default="/Users/arndt/Downloads/v2x_parquet")
-    parser.add_argument('--out_dir', type=str, default='output')
+    parser.add_argument('--out_dir', type=str, default='./preprocessing/output')
     parser.add_argument("--tok_train_max_sentences", type=int, default=50)
     args = parser.parse_args()
 
