@@ -34,7 +34,7 @@ pip install -e .
 ## Usage
 
 ### Tokenization
-To Tokenize the data, download the cellular_dataframe.parquet file from [Berlin ](https://ieee-dataport.org/open-access/berlin-). Then run one of the two preprocessing steps
+To Tokenize the data, download the cellular_dataframe.parquet file from [Berlin ](https://ieee-dataport.org/open-access/berlin-v2x). Then run one of the two preprocessing steps
 
   A. Tokenize for the digitwise transformer: 
 
