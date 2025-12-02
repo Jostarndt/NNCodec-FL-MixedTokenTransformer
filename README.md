@@ -39,13 +39,13 @@ To Tokenize the data, download the cellular_dataframe.parquet file from [Berlin 
   A. Tokenize for the digitwise transformer: 
 
   ```
-  python3 telko_dataloader.py pretokenize_telko_digit --data_path ./cellular_dataframe.parquet
+  python3 ./example/telko_dataloader.py pretokenize_telko_digit --data_path ./cellular_dataframe.parquet
   ```
 
   B. Tokenize for the mixed token transformer
 
 ```
-python3 telko_dataloader.py pretokenize_telko_mtt --data_path ./cellular_dataframe.parquet
+python3 ./example/telko_dataloader.py pretokenize_telko_mtt --data_path ./cellular_dataframe.parquet
 ```
 
 **Parameters**
