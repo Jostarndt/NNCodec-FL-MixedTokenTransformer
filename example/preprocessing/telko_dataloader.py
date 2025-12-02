@@ -606,7 +606,7 @@ def process_parquet(args, dest_dir=DATA_CACHE_DIR, out_dir=""):
     vocab_size = enc.sp_model.get_piece_size()
     vocabulary = [enc.sp_model.id_to_piece(i) for i in range(vocab_size)]
 
-    tokenized_filename = os.path.join(dest_dir, f"clientID_{shard_id}.bin")
+    tokenized_filename = os.path.join(out_dir, f"clientID_{shard_id}.bin")
 
     number_of_tokens_per_sample = []
     all_samples = []
@@ -644,8 +644,7 @@ def is_number(s):
 def process_parquet_mtt(args, dest_dir=DATA_CACHE_DIR, out_dir="", mixed_token=False):
     shard_id, df = args
 
-    # tokenizerpath = f"{out_dir}/telko_tokenizer.model"
-    tokenizerpath = "../tokenizer/telko_tokenizer.model"
+    tokenizerpath = os.path.dirname(os.path.abspath(__file__))+"/../tokenizer/telko_tokenizer.model"
     enc = Tokenizer(tokenizerpath)
 
     vocab_size = enc.sp_model.get_piece_size()
@@ -711,8 +710,8 @@ def process_parquet_mtt(args, dest_dir=DATA_CACHE_DIR, out_dir="", mixed_token=F
         all_samples.append(all_tokens)
 
 
-    np.savez(os.path.join(dest_dir, f"clientID_{shard_id}.npz"), *all_samples)
-
+    np.savez(os.path.join(out_dir, f"clientID_{shard_id}.npz"), *all_samples)
+    print("this is the path", os.path.join(out_dir, f"clientID_{shard_id}.npz"))
     print(f"max sequence length of samples: {np.max(number_of_tokens_per_sample)}")
     print(f"number of samples: {len(number_of_tokens_per_sample)}")
     print(f"number of tokens:: {np.sum(number_of_tokens_per_sample)}")
@@ -761,7 +760,8 @@ def pretokenize_telko(data_path, split='train', out_dir="", normalization=False)
 
 
         df_standard_numeric = (df.select_dtypes(include='number') - mean_frame) / (std_frame + 1e-10)
-        df.loc[:,df_standard_numeric.columns] = df_standard_numeric[df_standard_numeric.columns]
+        #df.loc[:,df_standard_numeric.columns] = df_standard_numeric[df_standard_numeric.columns]
+        df.loc[:, df_standard_numeric.columns] = df_standard_numeric[df_standard_numeric.columns].astype(df[df_standard_numeric.columns].dtypes)
 
         # Save the dictionary to a JSON file for denormalization demonstrator
         mean_dict, std_dict = mean_frame.to_dict(), std_frame.to_dict()
