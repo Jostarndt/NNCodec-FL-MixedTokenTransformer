@@ -737,6 +737,7 @@ def pretokenize_telko(data_path, split='train', out_dir="", normalization=False)
     # iterate the shards and tokenize all of them one by one
 
     data_dir = os.path.join(data_path, f"{split}")
+    out_dir = out_dir+"/"+split
     print(f"write tokenized bin sequences to binary files in {out_dir}")
     os.makedirs(out_dir, exist_ok=True)
 
@@ -1182,7 +1183,7 @@ if __name__ == "__main__":
     parser.add_argument("stage", type=str, choices=["pretokenize_telko_digit", "pretokenize_telko_mtt", "train_telko_vocab", "get_number_of_bins"])
     parser.add_argument("--vocab_size", type=int, default=5, help="pretokenization vocab size. 0 = use Llama 2 tokenizer.")
     parser.add_argument("--data_path", type=str, default="/Users/arndt/Downloads/v2x_parquet")
-    parser.add_argument('--out_dir', type=str, default='./preprocessing/output')
+    parser.add_argument('--out_dir', type=str, default='./example/preprocessing/output')
     parser.add_argument("--tok_train_max_sentences", type=int, default=50)
     args = parser.parse_args()
 
