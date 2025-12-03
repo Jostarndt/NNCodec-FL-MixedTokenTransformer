@@ -1,3 +1,3 @@
 # Paper
 
-Until the paper is officially available, we will provide a PDf here
+We will provide a PDF here until the paper is officially available.
