@@ -57,7 +57,7 @@ python3 example/preprocessing/telko_dataloader.py pretokenize_telko_mtt --data_p
 ### Training
 
 ```bash
-python3 example/nnc_fl.py --dataset_path=./example/preprocessing/output --model=mtt --num_clients=5 --epochs=2 --batch_size=8 --max_batches=300 --max_batches_test=150 --TLM_size=1 --tokenizer_path=./example/tokenizer/telko_tokenizer.model
+python3 example/nnc_fl.py --dataset_path=./example/preprocessing/output --model=mtt --num_clients=5 --epochs=30 --batch_size=8 --max_batches=300  --TLM_size=1 --tokenizer_path=./example/tokenizer/telko_tokenizer.model
 ```
 
 
@@ -71,7 +71,6 @@ python3 example/nnc_fl.py --dataset_path=./example/preprocessing/output --model=
 | `--epochs` | Training epochs per round |
 | `--batch_size` | Batch size for training |
 | `--max_batches` | Max batches for training |
-| `--max_batches_test` | Max batches for testing |
 | `--TLM_size` | Model size, one of (1,2) |
 | `--tokenizer_path` | Path to tokenizer model |
 | `--wandb`| Log on WandB |
@@ -81,8 +80,10 @@ python3 example/nnc_fl.py --dataset_path=./example/preprocessing/output --model=
 
 ### Evaluation
 ```
-python3 example/eval.py --model_path=results/best_mtt_.pt --batch_size=1 --dataset_path=./example/preprocessing/output --model=mtt --TLM_size=1 --tokenizer_path=./example/tokenizer/telko_tokenizer.model --workers=0  --spec_feat_test="datarate"
+python3 example/eval.py --model_path=results/best_mtt_.pt --batch_size=1 --dataset_path=./example/preprocessing/output --model=mtt --TLM_size=1 --tokenizer_path=./example/tokenizer/telko_tokenizer.model --workers=0
 ```
+
+to test only a specific feature one can additionally call   `--spec_feat_test="datarate"`
 
 **Parameters**
 
@@ -91,7 +92,7 @@ python3 example/eval.py --model_path=results/best_mtt_.pt --batch_size=1 --datas
 | `--model_path` | Path to model "file.pt" |
 | `--batch_size` | batch size |
 | `--max_seq_len` | Maximum sequence length |
-| `--workers` |  |
+| `--workers` | Number of workers |
 | `--spec_feat_test=feature` | Specific feature "feature" to test on, without accumulated losses, e.g. "datarate" |
 
 
