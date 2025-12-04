@@ -50,6 +50,7 @@ import re
 import time
 import textwrap
 import json
+import os
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -427,10 +428,9 @@ def evaluate_mtt(model, testloader, device='mps', max_batches=3, verbose=False, 
         enc = Tokenizer(tokenizer_model=f"{args.tokenizer_path}")
         vocab_size = enc.sp_model.get_piece_size()
         vocabulary = [enc.sp_model.id_to_piece(i) for i in range(vocab_size)]
-
-        with open(f'{args.tokenizer_path.split("/")[-2]}/mean_dict.json', 'r') as json_file:
+        with open(f'{os.getcwd()}/mean_dict.json', 'r') as json_file:
             mean_dict = json.load(json_file)
-        with open(f'{args.tokenizer_path.split("/")[-2]}/std_dict.json', 'r') as json_file:
+        with open(f'{os.getcwd()}/std_dict.json', 'r') as json_file:
             std_dict = json.load(json_file)
 
         global_predictions, global_gt, global_mse, global_rel_diff, glob_t_per_sample = {}, {}, {}, {}, {}

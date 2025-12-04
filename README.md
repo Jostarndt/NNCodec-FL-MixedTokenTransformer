@@ -57,7 +57,7 @@ python3 example/preprocessing/telko_dataloader.py pretokenize_telko_mtt --data_p
 ### Training
 
 ```bash
-python3 example/nnc_fl.py --dataset_path=./example/preprocessing/ --model=LSTM --num_clients=5 --epochs=30 --batch_size=8 --max_batches=300 --max_batches_test=150 --TLM_size=1 --tokenizer_path=./example/tokenizer/telko_tokenizer.model
+python3 example/nnc_fl.py --dataset_path=./example/preprocessing/output --model=mtt --num_clients=5 --epochs=2 --batch_size=8 --max_batches=300 --max_batches_test=150 --TLM_size=1 --tokenizer_path=./example/tokenizer/telko_tokenizer.model
 ```
 
 
@@ -81,7 +81,7 @@ python3 example/nnc_fl.py --dataset_path=./example/preprocessing/ --model=LSTM -
 
 ### Evaluation
 ```
-python3 eval.py --model_path=best_mtt_MTT_UC_slurmID_67554_gitID_917ac77.pt --batch_size=1 --dataset_path=./preprocessing/ --model=mtt --TLM_size=1 --tokenizer_path=./tokenizer/telko_tokenizer.model --max_seq_len=528 --workers=0  --spec_feat_test="datarate"
+python3 example/eval.py --model_path=results/best_mtt_.pt --batch_size=1 --dataset_path=./example/preprocessing/output --model=mtt --TLM_size=1 --tokenizer_path=./example/tokenizer/telko_tokenizer.model --workers=0  --spec_feat_test="datarate"
 ```
 
 **Parameters**

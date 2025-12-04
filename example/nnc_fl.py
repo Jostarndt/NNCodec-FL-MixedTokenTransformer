@@ -118,7 +118,7 @@ parser.add_argument('--model_rand_int', type=bool, default=True, help='model ran
 parser.add_argument('--dataset', type=str, default='V2X', metavar=f"Any of {datasets.__all__}")
 parser.add_argument('--dataset_path', type=str, default='../data')
 parser.add_argument('--tokenizer_path', type=str, default='./tokenizer/telko_tokenizer.model')
-parser.add_argument('--max_seq_len', type=int, default=1525, help='Custom max_seq_len for tiny Llama')
+parser.add_argument('--max_seq_len', type=int, default=None, help='Custom max_seq_len for tiny Llama')
 parser.add_argument('--TLM_size', type=int, default=0, help='tiny Llama size [0, 1, 2, 3]')
 parser.add_argument('--results', type=str, default='./results')
 parser.add_argument('--workers', type=int, default=4, help='Number of data loading workers (default: 4), if 0 debugging mode enabled')
@@ -140,6 +140,13 @@ parser.add_argument('--cuda_device', type=int, default=None)
 
 def main():
     args = parser.parse_args()
+    if args.max_seq_len is None:
+        if args.model == "mtt":
+            args.max_seq_len = 528
+        elif args.model in ["DBD", "LSTM"]:
+            args.max_seq_len = 832
+        else:
+            args.max_seq_len = 1525
     warnings.filterwarnings("ignore")
     # logging.getLogger("flwr").setLevel(logging.CRITICAL)
 
