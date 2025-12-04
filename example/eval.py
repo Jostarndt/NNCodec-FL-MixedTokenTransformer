@@ -161,7 +161,9 @@ def main():
             os.environ["WANDB_API_KEY"] = args.wandb_key
         else:
             assert 0, "incompatible W&B authentication key"
-
+    
+    if 'DBD' in args.model:
+        args.model = 'tinyllama'
     if args.model in models.__all__:
         if "tinyllama" in args.model or "LSTM" in args.model or "mtt" in args.model:
             model, tokenizer = models.init_model(args.model, parser_args=args)
