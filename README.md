@@ -83,8 +83,6 @@ python3 example/nnc_fl.py --dataset_path=./example/preprocessing/output --model=
 python3 example/eval.py --model_path=results/best_mtt_.pt --batch_size=1 --dataset_path=./example/preprocessing/output --model=mtt --TLM_size=1 --tokenizer_path=./example/tokenizer/telko_tokenizer.model --workers=0
 ```
 
-to test only a specific feature one can additionally call   `--spec_feat_test="datarate"`
-
 **Parameters**
 
 | Parameter | Description |
