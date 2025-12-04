@@ -147,6 +147,9 @@ def main():
             args.max_seq_len = 832
         else:
             args.max_seq_len = 1525
+    if 'DBD' in args.model:
+        args.model = 'tinyllama'
+
     warnings.filterwarnings("ignore")
     # logging.getLogger("flwr").setLevel(logging.CRITICAL)
 
