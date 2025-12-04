@@ -77,6 +77,8 @@ python3 example/nnc_fl.py --dataset_path=./example/preprocessing/output --model=
 | `--wandb_key="my_key"`|WandB key (optional)|
 |`--wandb_run_name="my_project"`| WandB project (optional)|
 
+Resulting bitstreams and the best performing global TLM of all communication rounds will be stored in a `results` directory (with path set via `--results`). Evaluation can be found in the next section.
+
 
 ### Evaluation
 ```
@@ -99,13 +101,7 @@ python3 example/eval.py --model_path=results/best_mtt_.pt --batch_size=1 --datas
   The pre-tokenized [Berlin V2X dataset](https://ieee-dataport.org/open-access/berlin-v2x) can be downloaded here: https://datacloud.hhi.fraunhofer.de/s/CcAeHRoWRqe5PiQ
   and the pre-trained Sentencepiece Tokenizer is included in this repository at [telko_tokenizer.model](https://github.com/d-becking/nncodec2/blob/master/example/tokenizer/).
   
-  Resulting bitstreams and the best performing global TLM of all communication rounds will be stored in a `results` directory (with path set via `--results`).
-  To evaluate this model, execute:
 
-  ```bash
-  python example/eval.py --model_path=<your_path>/best_tinyllama_.pt --batch_size=1 --dataset=V2X \
-  --dataset_path=<your_path>/v2x --model=tinyllama --TLM_size=1 --tokenizer_path=./example/tokenizer/telko_tokenizer.model
-  ```
 
 
 
