@@ -88,7 +88,6 @@ python3 example/eval.py --model_path=results/best_mtt_.pt --batch_size=1 --datas
 | Parameter | Description |
 |-----------|-------------|
 | `--model_path` | Path to model "file.pt" |
-| `--batch_size` | batch size |
 | `--max_seq_len` | Maximum sequence length |
 | `--workers` | Number of workers |
 | `--spec_feat_test=feature` | Specific feature "feature" to test on, without accumulated losses, e.g. "datarate" |
