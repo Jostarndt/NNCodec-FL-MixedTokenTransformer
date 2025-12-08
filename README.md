@@ -15,7 +15,15 @@ We propose Mixed-Token Transformers (MTT) for predicting mobile network features
 ## Citation
 
 ```
-ArXiv bibtex
+@INPROCEEDINGS{MTT-NNC-FL,
+  author={Becking, Daniel and Arndt, Jost and Friese, Ingo and Müller, Karsten and Ma, Jackie and Buchholz, Thomas and Galkow-Schneider, Mandy and Samek, Wojciech and Marpe, Detlev},
+  booktitle={GLOBECOM 2025 - 2025 IEEE Global Communications Conference}, 
+  title={Efficient Federated Learning of Mixed-Token Transformers for Cellular Feature Prediction}, 
+  year={2025},
+  volume={},
+  number={},
+  pages={2637-2643}
+}
 ```
 
 ## Installation
