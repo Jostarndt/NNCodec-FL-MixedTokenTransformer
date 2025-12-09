@@ -12,19 +12,6 @@ PDF available under [/docs/Globecom2ArXiv-2.pdf](docs/Globecom2ArXiv-2.pdf) upon
 ## Short Paper Abstract
 We propose Mixed-Token Transformers (MTT) for predicting mobile network features in Autonomous Networks using Federated Learning. Our approach enables multiple network cells across five geographically distinct regions to collaboratively learn while preserving privacy. Using NNCodec compression, we reduce FL communication overhead to below 1% with negligible performance loss, while achieving ~5× faster inference on the Berlin V2X dataset.
 
-## Citation
-
-```
-@INPROCEEDINGS{MTT-NNC-FL,
-  author={Becking, Daniel and Arndt, Jost and Friese, Ingo and Müller, Karsten and Ma, Jackie and Buchholz, Thomas and Galkow-Schneider, Mandy and Samek, Wojciech and Marpe, Detlev},
-  booktitle={GLOBECOM 2025 - 2025 IEEE Global Communications Conference}, 
-  title={Efficient Federated Learning of Mixed-Token Transformers for Cellular Feature Prediction}, 
-  year={2025},
-  volume={},
-  number={},
-  pages={2637-2643}
-}
-```
 
 ## Installation
 
@@ -114,9 +101,6 @@ python3 example/eval.py --model_path=results/best_mtt_.pt --batch_size=1 --datas
 
 
 
-
-
-
 ## NNCodec
 <div align="center">
 <img src="https://github.com/user-attachments/assets/564b9d02-a706-459a-a8bb-241d2ec4608f" width="660"/>
@@ -144,17 +128,47 @@ The original file [nnc_fl.py](https://github.com/d-becking/nncodec2/blob/master/
 Federated Learning with NNCodec. It imports the `NNClient` and `NNCFedAvg` classes — specialized NNC-[*Flower*](https://flower.ai) objects — that 
 are responsible for establishing and handling the compressed FL environment.
 
+```bash
+python3 example/nnc_fl.py --dataset_path=./example/preprocessing/output --model=mtt --num_clients=5 --epochs=30 --batch_size=8 --max_batches=300  --TLM_size=1 --tokenizer_path=./example/tokenizer/telko_tokenizer.model --compress_upstream --compress_downstream --err_accumulation --compress_differences --qp=-24 --tca --sparsity=0.5 --struct_spars_factor=0.9 --row_skipping
+```
 
-## Important References / EUCnc
+**Compression Parameters**
+
+| Parameter | Description |
+|-----------|-------------|
+| `--compress_upstream` | Compression of clients-to-server communication |
+| `--compress_downstream` | Compression of server-to-clients communication |
+| `--err_accumulation` | Quantization errors are locally accumulated ("residuals") and added to NN update prior to compression |
+| `--compress_differences` | Weight differences (dNN) wrt. a base model are compressed, otherwise full base models (NN) are communicated |
+| `--qp` | Quantization parameter (larger is coarser) |
+| `--tca` | Enables Temporal Context Adaptation (TCA) |
+| `--sparsity` | Introduces mean- & std-based unstructured sparsity [0.0, 1.0] |
+| `--struct_spars_factor` | Introduces structured per-channel sparsity (based on channel means); requires --sparsity > 0 |
+| `--row_skipping`| Enables skipping tensor rows in arithmetic coding stage if they are entirely zero |
+
+
+
+## Important References
 
   The pre-tokenized [Berlin V2X dataset](https://ieee-dataport.org/open-access/berlin-v2x) can be downloaded here: https://datacloud.hhi.fraunhofer.de/s/CcAeHRoWRqe5PiQ
   and the pre-trained Sentencepiece Tokenizer is included in this repository at [telko_tokenizer.model](https://github.com/d-becking/nncodec2/blob/master/example/tokenizer/).
   
   Resulting bitstreams and the best performing global TLM of all communication rounds will be stored in a `results` directory (with path set via `--results`).
-  To evaluate this model, execute:
-
 
     
+## Citation
+
+```
+@INPROCEEDINGS{nnc-fl-mtt,
+  author={Becking, Daniel and Arndt, Jost and Friese, Ingo and Müller, Karsten and Ma, Jackie and Buchholz, Thomas and Galkow-Schneider, Mandy and Samek, Wojciech and Marpe, Detlev},
+  booktitle={GLOBECOM 2025 - 2025 IEEE Global Communications Conference}, 
+  title={Efficient Federated Learning of Mixed-Token Transformers for Cellular Feature Prediction}, 
+  year={2025},
+  volume={},
+  number={},
+  pages={2637-2643}
+}
+```
 
 ## License
 
