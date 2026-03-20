@@ -166,8 +166,8 @@ python3 example/nnc_fl.py --dataset_path=./example/preprocessing/output --model=
   year={2025},
   volume={},
   number={},
-  pages={2637-2643}
-}
+  pages={2643-2649},
+  doi={10.1109/GLOBECOM59602.2025.11431868}}
 ```
 
 ## License
