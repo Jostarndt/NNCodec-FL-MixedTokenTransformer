@@ -7,7 +7,7 @@
 
 **Accepted at GLOBECOM2025!**
 
-PDF available under [/docs/Globecom2ArXiv-2.pdf](docs/Globecom2ArXiv-2.pdf) upon offical release of our work at Globecom.
+PDF available under  [ieeexplore.ieee.org/document/11431868](https://ieeexplore.ieee.org/document/11431868).
 
 ## Short Paper Abstract
 We propose Mixed-Token Transformers (MTT) for predicting mobile network features in Autonomous Networks using Federated Learning. Our approach enables multiple network cells across five geographically distinct regions to collaboratively learn while preserving privacy. Using NNCodec compression, we reduce FL communication overhead to below 1% with negligible performance loss, while achieving ~5× faster inference on the Berlin V2X dataset.
@@ -169,6 +169,7 @@ python3 example/nnc_fl.py --dataset_path=./example/preprocessing/output --model=
   pages={2643-2649},
   doi={10.1109/GLOBECOM59602.2025.11431868}}
 ```
+
 
 ## License
 
